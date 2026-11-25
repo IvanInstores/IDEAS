@@ -50,7 +50,9 @@ Server gratuito su **Cloudflare Workers + D1** (`server/`): https://idee-promemo
 - Ogni minuto invia le notifiche dei promemoria scaduti (Web Push, VAPID).
 - Sul server ci sono solo: id casuale del dispositivo, id idea, ora, indirizzo push. **Nessun testo delle idee**: la notifica arriva vuota e il telefono la completa con i propri dati.
 - Attivazione: app → ⚙ → *Notifiche promemoria* → **Attiva notifiche** (o al primo promemoria). *Invia prova* per verificare.
-- iPhone: solo con l'app installata sulla schermata Home (iOS 16.4+).
+- Pulsanti nella notifica: **⏰ Rimanda** (1 ora; dopo le 18 → domani alle 9) e **✓ Fatto**, senza aprire l'app.
+- Promemoria ricorrenti: ogni giorno, giorni feriali, ogni settimana, ogni 2 settimane, ogni mese. Allo scatto la serie passa alla data successiva e l'idea resta "da riprendere" finché non tocchi Fatto. "Rimanda" su un ricorrente aggiunge un avviso extra senza spostare la serie. Google Calendar e file .ics ricevono anche la ripetizione.
+- iPhone: solo con l'app installata sulla schermata Home (iOS 16.4+). I pulsanti nella notifica ci sono su Android; su iPhone si tocca la notifica e si usa Fatto/Rimanda nell'idea.
 - Chiave privata VAPID: solo come segreto del Worker (`VAPID_PRIVATE_JWK`), mai nel repository. Chiave pubblica in `config.js`.
 - Ripubblicare: `cd server && npx wrangler deploy` (token Cloudflare con permessi Workers + D1 Modifica, salvato nell'ambiente di lavoro).
 - Piano gratuito Cloudflare: 100.000 richieste/giorno, cron ogni minuto, D1 500 MB.
@@ -61,4 +63,4 @@ Server gratuito su **Cloudflare Workers + D1** (`server/`): https://idee-promemo
 - Categorie iniziali di esempio: Store (Allestimento, Cuneo – nuova apertura), Vendite (Venditori, Clienti), Marketing, Organizzazione (Automazioni), Personale. Modificabili.
 
 ## File
-`index.html` interfaccia · `styles.css` grafica · `app.js` logica · `sync.js` sincronizzazione cloud · `config.js` chiavi pubbliche · `sw.js` offline · `manifest.webmanifest` installazione · `vendor/lucide.min.js` icone Lucide 0.468
+`index.html` interfaccia · `styles.css` grafica · `app.js` logica · `sync.js` sincronizzazione cloud · `config.js` chiavi pubbliche · `reminder-core.js` logica promemoria (app + service worker) · `push.js` notifiche · `sw.js` offline · `manifest.webmanifest` installazione · `vendor/lucide.min.js` icone Lucide 0.468

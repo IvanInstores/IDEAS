@@ -413,6 +413,14 @@ dialog::backdrop { background: rgba(16,24,43,.5); }
 #remInput { border: 1.5px solid var(--line); background: var(--paper); border-radius: var(--r-md); padding: 12px; font-size: 16px; }
 .danger-text { color: var(--coral); }
 
+.rem-repeat { display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); border-radius: var(--r-md); padding: 0 12px; background: var(--paper); }
+.rem-repeat svg { width: 18px; height: 18px; color: var(--ink-soft); }
+.rem-repeat select { flex: 1; border: 0; background: none; padding: 12px 0; font-size: 16px; font-weight: 600; outline: none; }
+.rem-due { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px; margin-bottom: 10px; border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--coral) 14%, transparent); color: var(--coral); }
+.rem-due .row { width: 100%; }
+.rem-due .btn.primary { background: var(--coral); border-color: var(--coral); color: #fff; }
+
 /* ---------- sync ---------- */
 .prov { border: 1.5px solid var(--line); border-radius: var(--r-md); padding: 12px; margin-top: 10px; }
 .prov.active { border-color: var(--sage); }

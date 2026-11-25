@@ -245,7 +245,7 @@ const Sync = {
       for (const i of list) {
         const st = statusOf(i.status).label;
         lines.push(`### ${i.title || firstLine(i.text) || mediaTitle(i)}`);
-        lines.push(`- **Creata:** ${fmtFull(i.createdAt)} · **Stato:** ${st}${i.remindAt && !i.remindDone ? ` · **Promemoria:** ${fmtFull(i.remindAt)}` : ''}`);
+        lines.push(`- **Creata:** ${fmtFull(i.createdAt)} · **Stato:** ${st}${RC.active(i) ? ` · **Promemoria:** ${fmtFull(i.remindAt)}${i.remindRepeat ? ' (' + RC.repeatLabel(i.remindRepeat).toLowerCase() + ')' : ''}` : ''}`);
         if (i.text) lines.push('', ...(i.title ? i.text : i.text.split('\n').slice(1).join('\n')).split('\n').filter(Boolean).map(t => '> ' + t));
         const att = i.blocks.filter(b => b.remotePath).map(b => b.remotePath.split('/').pop());
         if (att.length) lines.push('', '- **Allegati (cartella Allegati):** ' + att.join(', '));

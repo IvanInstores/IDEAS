@@ -11,6 +11,7 @@ const Push = {
   device() {
     let d = localStorage.getItem('idee-device');
     if (!d) { d = b64url(crypto.getRandomValues(new Uint8Array(32))); localStorage.setItem('idee-device', d); }
+    DB.setMeta('device', d).catch(() => {}); // il service worker lo usa per riallineare il server
     return d;
   },
   key() {
@@ -52,7 +53,7 @@ const Push = {
   async sync() {
     if ((await this.state()) !== 'on') return;
     const s = await this.sub(false);
-    const reminders = S.ideas.filter(i => i.remindAt && !i.remindDone && i.remindAt > Date.now() - 60000).map(i => ({ idea: i.id, at: i.remindAt }));
+    const reminders = RC.serverList(S.ideas);
     await this.call('/sync', { device: this.device(), sub: s.toJSON(), reminders });
     localStorage.setItem('idee-push-synced', String(Date.now()));
   },

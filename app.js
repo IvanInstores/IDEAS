@@ -57,12 +57,13 @@ const STATUSES = [
   { id: 'scartata', label: 'Scartata', icon: 'circle-x', color: '#8A93A8' },
 ];
 const statusOf = id => STATUSES.find(x => x.id === id) || STATUSES[0];
-const isDue = i => i.remindAt && !i.remindDone && i.remindAt <= Date.now();
+const isDue = i => RC.isDue(i);
 function normalizeIdea(i) {
   i.status ||= 'nuova';
   i.statusHistory ||= [{ status: i.status, at: i.createdAt }];
   i.updatedAt ||= i.createdAt;
   i.remindAt ??= null;
+  i.remindRepeat ??= null;
   return i;
 }
 // called after every local change: bump sync clock + schedule cloud sync
@@ -181,7 +182,7 @@ function rootOf(id) { let c = catById(id), g = 0; while (c?.parentId && g++ < 20
 
 function filteredIdeas() {
   let list = S.ideas;
-  if (S.due) return [...list.filter(isDue)].sort((a, b) => a.remindAt - b.remindAt);
+  if (S.due) return [...list.filter(isDue)].sort((a, b) => (a.remindAt || 0) - (b.remindAt || 0));
   if (S.filter) { const set = descendants(S.filter); list = list.filter(i => set.has(i.catId)); }
   if (S.status) list = list.filter(i => i.status === S.status);
   if (S.q) {
@@ -223,7 +224,7 @@ function renderList(enterId) {
       <span class="catline"><span class="cl">${i.catId ? `<span class="dot" style="--c:${col}"></span>${esc(catPath(i.catId))}` : 'Senza categoria'}</span>${statusBadge(i)}</span>
       <h4>${esc(title)}</h4>
       ${body ? `<p>${esc(body)}</p>` : ''}
-      ${i.remindAt && !i.remindDone ? `<span class="remind ${isDue(i) ? 'due' : ''}"><i data-lucide="${isDue(i) ? 'bell-ring' : 'bell'}"></i>${esc(fmtRemind(i.remindAt))}</span>` : ''}
+      ${remindChip(i)}
       ${imgs.length || counts.length ? `<span class="media-strip">
         ${imgs.map(b => `<img class="thumb" alt="" src="${track(URL.createObjectURL(b.blob))}">`).join('')}
         ${counts.map(([ic, n]) => `<span class="mtag"><i data-lucide="${ic}"></i>${n}</span>`).join('')}
@@ -232,6 +233,15 @@ function renderList(enterId) {
   }
   main.innerHTML = html;
   icons();
+}
+function remindText(i) {
+  if (!RC.active(i)) return '';
+  return (i.remindRepeat ? RC.repeatLabel(i.remindRepeat) + ' · prossimo ' : '') + fmtRemind(i.remindAt);
+}
+function remindChip(i) {
+  if (!RC.active(i) && !i.remindPending) return '';
+  const due = isDue(i);
+  return `<span class="remind ${due ? 'due' : ''}"><i data-lucide="${due ? 'bell-ring' : i.remindRepeat ? 'repeat' : 'bell'}"></i>${due && i.remindRepeat ? 'Da riprendere · ' : ''}${esc(remindText(i))}${i.snoozeUntil ? ' · rimandato a ' + esc(fmtRemind(i.snoozeUntil)) : ''}</span>`;
 }
 function statusBadge(i) {
   const st = statusOf(i.status);
@@ -463,16 +473,20 @@ function openDetail(id) {
     </div>
     <div class="det-section">
       <h3>Promemoria</h3>
-      ${i.remindAt && !i.remindDone ? `
-        <p class="rem-line ${isDue(i) ? 'due' : ''}"><i data-lucide="${isDue(i) ? 'bell-ring' : 'bell'}"></i>${esc(fmtFull(i.remindAt))}</p>
+      ${RC.active(i) || i.remindPending ? `
+        ${isDue(i) ? `<div class="rem-due"><i data-lucide="bell-ring"></i><b>Da riprendere</b>
+          <span class="row"><button class="btn small primary" data-rem="done"><i data-lucide="check"></i>Fatto</button>
+          <button class="btn small" data-rem="snooze"><i data-lucide="alarm-clock"></i>${esc(RC.snoozeChoice().label)}</button></span></div>` : ''}
+        ${RC.active(i) ? `<p class="rem-line"><i data-lucide="${i.remindRepeat ? 'repeat' : 'bell'}"></i>${i.remindRepeat ? esc(RC.repeatLabel(i.remindRepeat)) + ' · prossimo: ' : ''}${esc(fmtFull(i.remindAt))}</p>` : ''}
+        ${i.snoozeUntil ? `<p class="rem-line"><i data-lucide="alarm-clock"></i>Rimandato a ${esc(fmtFull(i.snoozeUntil))}</p>` : ''}
         <div class="rem-actions">
           <button class="btn small" data-cal="google"><i data-lucide="calendar-plus"></i>Google Calendar</button>
           <button class="btn small" data-cal="outlook"><i data-lucide="calendar-plus"></i>Outlook</button>
           <button class="btn small" data-cal="ics"><i data-lucide="calendar-arrow-down"></i>File calendario</button>
         </div>
         <div class="rem-actions">
-          <button class="btn small" data-rem="edit"><i data-lucide="clock"></i>Sposta</button>
-          <button class="btn small" data-rem="done"><i data-lucide="check"></i>Ripresa, togli</button>
+          <button class="btn small" data-rem="edit"><i data-lucide="clock"></i>Modifica</button>
+          <button class="btn small" data-rem="clear"><i data-lucide="bell-off"></i>Togli</button>
         </div>`
       : `<button class="btn small" data-rem="edit"><i data-lucide="bell-plus"></i>Imposta promemoria</button>`}
     </div>
@@ -627,7 +641,7 @@ function presetTimes() {
   return out;
 }
 const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 6e4); return d.toISOString().slice(0, 16); };
-function pickReminder(current) {
+function pickReminder(current, repeat) {
   const d = $('#remDlg');
   $('#remPresets').innerHTML = presetTimes().map(([l, ts]) =>
     `<button type="button" class="chip" data-ts="${ts}">${l}<small>${esc(fmtRemind(ts))}</small></button>`).join('');
@@ -635,51 +649,58 @@ function pickReminder(current) {
   inp.value = toLocalInput(current || presetTimes()[0][1]);
   inp.min = toLocalInput(Date.now());
   $('#remClear').hidden = !current;
+  $('#remRepeat').innerHTML = RC.REPEATS.map(([v, l]) => `<option value="${v}" ${v === (repeat || '') ? 'selected' : ''}>${l}</option>`).join('');
   d.showModal(); icons();
+  const out = ts => ({ ts, repeat: $('#remRepeat').value || null });
   return new Promise(res => {
-    $('#remPresets').onclick = e => { const b = e.target.closest('[data-ts]'); if (b) { d.close(); res(+b.dataset.ts); } };
+    $('#remPresets').onclick = e => { const b = e.target.closest('[data-ts]'); if (b) { d.close(); res(out(+b.dataset.ts)); } };
     $('#remClear').onclick = () => { d.close(); res(0); };
-    $('#remOk').onclick = () => { const v = new Date(inp.value).getTime(); d.close(); res(isNaN(v) ? undefined : v); };
+    $('#remOk').onclick = () => { const v = new Date(inp.value).getTime(); d.close(); res(isNaN(v) ? undefined : out(v)); };
     $('#remCancel').onclick = () => { d.close(); res(undefined); };
     d.oncancel = () => res(undefined);
   });
 }
 function renderCmpRemind() {
-  const has = draft.remindAt && !draft.remindDone;
-  $('#cmpRemind').innerHTML = `<i data-lucide="${has ? 'bell' : 'bell-plus'}"></i><span>${has ? esc(fmtRemind(draft.remindAt)) : 'Promemoria'}</span>`;
+  const has = RC.active(draft);
+  $('#cmpRemind').innerHTML = `<i data-lucide="${has ? (draft.remindRepeat ? 'repeat' : 'bell') : 'bell-plus'}"></i><span>${has ? esc(fmtRemind(draft.remindAt)) + (draft.remindRepeat ? ' · ' + esc(RC.repeatLabel(draft.remindRepeat).toLowerCase()) : '') : 'Promemoria'}</span>`;
   $('#cmpRemind').classList.toggle('set', !!has);
   icons();
 }
-function applyReminder(i, ts) {
-  if (ts === undefined) return false;
-  if (ts === 0) { i.remindAt = null; i.remindDone = false; return true; }
-  i.remindAt = ts; i.remindDone = false; i.remindNotified = false;
+function applyReminder(i, r) {
+  if (r === undefined) return false;
+  Object.assign(i, { remindDone: false, remindNotified: false, remindPending: false, snoozeUntil: null });
+  if (r === 0) { i.remindAt = null; i.remindRepeat = null; return true; }
+  i.remindAt = r.ts; i.remindRepeat = r.repeat;
   Reminders.askPermission();
   return true;
 }
 async function editReminderOf(id) {
   const i = S.ideas.find(x => x.id === id); if (!i) return;
-  const ts = await pickReminder(i.remindDone ? null : i.remindAt);
-  if (!applyReminder(i, ts)) return;
+  const r = await pickReminder(RC.active(i) ? i.remindAt : null, i.remindRepeat);
+  if (!applyReminder(i, r)) return;
   touched(i); await DB.put('ideas', i);
   openDetail(id); renderList();
-  toast(ts ? 'Promemoria: ' + fmtRemind(ts) : 'Promemoria tolto');
+  toast(r ? 'Promemoria: ' + fmtRemind(r.ts) + (r.repeat ? ' · ' + RC.repeatLabel(r.repeat).toLowerCase() : '') : 'Promemoria tolto');
 }
-async function reminderDone(id) {
+async function reminderAct(id, fn, msg) {
   const i = S.ideas.find(x => x.id === id); if (!i) return;
-  i.remindDone = true; touched(i); await DB.put('ideas', i);
-  openDetail(id); renderList(); toast('Promemoria completato');
+  fn(i); touched(i); await DB.put('ideas', i);
+  openDetail(id); renderList(); toast(msg);
 }
+const reminderDone = id => reminderAct(id, i => RC.done(i), 'Fatto' );
+const reminderSnooze = id => { const sn = RC.snoozeChoice(); return reminderAct(id, i => RC.snooze(i, sn.ts), 'Rimandato: ' + fmtRemind(sn.ts)); };
+const reminderClear = id => reminderAct(id, i => applyReminder(i, 0), 'Promemoria tolto');
 function calendarLink(i, kind) {
   const title = '💡 ' + (i.title || firstLine(i.text) || 'Idea');
   const desc = [i.text, i.catId ? 'Categoria: ' + catPath(i.catId) : '', 'Apri Idee: ' + location.origin + location.pathname].filter(Boolean).join('\n\n');
   const start = new Date(i.remindAt), end = new Date(i.remindAt + 15 * 6e4);
   const z = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  if (kind === 'google') return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${z(start)}/${z(end)}&details=${encodeURIComponent(desc)}`;
+  const rr = RC.rrule(i.remindRepeat);
+  if (kind === 'google') return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${z(start)}/${z(end)}&details=${encodeURIComponent(desc)}${rr ? '&recur=' + encodeURIComponent('RRULE:' + rr) : ''}`;
   if (kind === 'outlook') return `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${start.toISOString()}&enddt=${end.toISOString()}&body=${encodeURIComponent(desc)}`;
-  const icsEsc = t => String(t).replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  const icsEsc = t => String(t).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Idee//IT', 'BEGIN:VEVENT', `UID:${i.id}@idee`, `DTSTAMP:${z(new Date())}`,
-    `DTSTART:${z(start)}`, `DTEND:${z(end)}`, `SUMMARY:${icsEsc(title)}`, `DESCRIPTION:${icsEsc(desc)}`,
+    `DTSTART:${z(start)}`, `DTEND:${z(end)}`, ...(rr ? ['RRULE:' + rr] : []), `SUMMARY:${icsEsc(title)}`, `DESCRIPTION:${icsEsc(desc)}`,
     'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(title)}`, 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
 }
 async function addToCalendar(id, kind) {
@@ -700,19 +721,18 @@ const Reminders = {
     if (r) Push.enable();
   },
   async check() {
-    const fresh = S.ideas.filter(i => isDue(i) && !i.remindNotified);
+    const fresh = S.ideas.filter(i => RC.firing(i).length);
     if (!fresh.length) return;
     for (const i of fresh) {
-      i.remindNotified = true; await DB.put('ideas', i);
-      const title = i.title || firstLine(i.text) || 'Idea';
+      RC.fire(i); await DB.put('ideas', i);
       try {
         if (Notification?.permission === 'granted') {
           const reg = await navigator.serviceWorker?.getRegistration();
-          const opts = { body: 'Promemoria: è il momento di riprendere questa idea', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: i.id, data: { id: i.id } };
-          reg ? reg.showNotification('💡 ' + title, opts) : new Notification('💡 ' + title, opts);
+          reg ? reg.showNotification(RC.title(i), RC.notifOptions(i)) : new Notification(RC.title(i), RC.notifOptions(i));
         }
       } catch {}
     }
+    window.Sync?.schedule(); window.Push?.schedule();
     if (document.visibilityState === 'visible') toast(fresh.length === 1 ? 'Hai un’idea da riprendere' : `Hai ${fresh.length} idee da riprendere`);
     renderList();
   },
@@ -735,11 +755,11 @@ function bind() {
   $('#chips').onclick = onChip; $('#subchips').onclick = onChip;
   $('#statuschips').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; S.status = b.dataset.s || null; renderList(); };
   $('#dueBanner').onclick = () => { S.due = !S.due; renderList(); scrollTo({ top: 0, behavior: 'smooth' }); };
-  $('#cmpRemind').onclick = async () => { const ts = await pickReminder(draft.remindDone ? null : draft.remindAt); if (applyReminder(draft, ts)) renderCmpRemind(); };
+  $('#cmpRemind').onclick = async () => { const r = await pickReminder(RC.active(draft) ? draft.remindAt : null, draft.remindRepeat); if (applyReminder(draft, r)) renderCmpRemind(); };
   $('#detBody').onclick = e => {
     const st = e.target.closest('[data-status]'); if (st) return changeStatus(currentId, st.dataset.status);
     const cal = e.target.closest('[data-cal]'); if (cal) return addToCalendar(currentId, cal.dataset.cal);
-    const rm = e.target.closest('[data-rem]'); if (rm) return rm.dataset.rem === 'done' ? reminderDone(currentId) : editReminderOf(currentId);
+    const rm = e.target.closest('[data-rem]'); if (rm) return ({ done: reminderDone, snooze: reminderSnooze, clear: reminderClear, edit: editReminderOf })[rm.dataset.rem](currentId);
   };
   $('#btnSearch').onclick = () => { $('#searchbar').hidden = false; $('#q').focus(); };
   $('#btnSearchClose').onclick = () => { $('#searchbar').hidden = true; $('#q').value = ''; S.q = ''; renderList(); };
@@ -820,7 +840,10 @@ function bind() {
   // shortcuts from the home-screen icon (manifest shortcuts)
   const openId = new URLSearchParams(location.search).get('open');
   if (openId) setTimeout(() => openDetail(openId), 300);
-  navigator.serviceWorker?.addEventListener('message', e => e.data?.open && openDetail(e.data.open));
+  navigator.serviceWorker?.addEventListener('message', async e => {
+    if (e.data?.reload) { S.ideas = (await DB.all('ideas')).map(normalizeIdea); renderList(); if (!$('#detail').hidden && currentId) openDetail(currentId); window.Sync?.schedule(); }
+    if (e.data?.open) openDetail(e.data.open);
+  });
   const a = new URLSearchParams(location.search).get('a');
   if (a) {
     const presets = { foto: () => $('#inPhoto').click(), voce: startAudio, disegno: openDraw, detta: startDictation };

@@ -214,6 +214,7 @@
 <dialog id="remDlg">
   <div class="dlg">
     <h3>Promemoria</h3>
+    <label class="rem-repeat"><i data-lucide="repeat"></i><select id="remRepeat" aria-label="Ripetizione"></select></label>
     <div class="rem-presets" id="remPresets"></div>
     <label class="hint" for="remInput">Oppure scegli giorno e ora</label>
     <input type="datetime-local" id="remInput">
@@ -230,6 +231,7 @@
 
 <script src="vendor/lucide.min.js"></script>
 <script src="config.js"></script>
+<script src="reminder-core.js"></script>
 <script src="app.js"></script>
 <script src="sync.js"></script>
 <script src="push.js"></script>
