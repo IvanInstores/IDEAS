@@ -223,6 +223,7 @@ const Sync = {
       this.tomb.ideas = {}; this.tomb.cats = {}; await this.saveTomb();
       this.cfg.lastSync = Date.now(); this.cfg.lastError = null; this.cfg.authExpired = false; await this.saveAuth();
       renderList();
+      if (pulled) window.Push?.schedule();
       if (mode === 'manual' || pulled) toast(`Sincronizzato${pulled ? ` · ${pulled} idee ricevute` : ''}${pushed ? ` · ${pushed} allegati caricati` : ''}`);
     } catch (e) {
       console.error(e);

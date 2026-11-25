@@ -1,0 +1,14 @@
+name = "idee-promemoria"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+VAPID_PUBLIC = "BMmie1ejDqQPMUf-NFxOo1U-ekMxr_fe0DtC1LO5uVoCWdpoE55JGDsOWP6hUg2s_z13l6c3Rvp9JPGICkzaDmI"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "idee-promemoria"
+database_id = "DA-COMPILARE"

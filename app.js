@@ -66,7 +66,7 @@ function normalizeIdea(i) {
   return i;
 }
 // called after every local change: bump sync clock + schedule cloud sync
-function touched(i) { i.updatedAt = Date.now(); window.Sync?.schedule(); }
+function touched(i) { i.updatedAt = Date.now(); window.Sync?.schedule(); window.Push?.schedule(); }
 
 /* ---------------- state ---------------- */
 const S = { ideas: [], cats: [], filter: null, status: null, due: false, q: '', urls: [] };
@@ -693,7 +693,11 @@ async function addToCalendar(id, kind) {
 const Reminders = {
   start() { this.check(); setInterval(() => this.check(), 30000); document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && this.check()); },
   async askPermission() {
-    try { if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission(); } catch {}
+    // al primo promemoria propone di attivare le notifiche sul telefono
+    if (!window.Push?.configured || !Push.supported || Notification.permission !== 'default') return;
+    const r = await ask({ title: 'Avvisarti sul telefono?', input: false, okText: 'Sì, attiva',
+      msg: 'Ricevi la notifica all’ora del promemoria anche con l’app chiusa. Il telefono ti chiederà il permesso.' });
+    if (r) Push.enable();
   },
   async check() {
     const fresh = S.ideas.filter(i => isDue(i) && !i.remindNotified);
@@ -741,7 +745,7 @@ function bind() {
   $('#btnSearchClose').onclick = () => { $('#searchbar').hidden = true; $('#q').value = ''; S.q = ''; renderList(); };
   $('#q').oninput = e => { S.q = e.target.value.trim(); renderList(); };
   $('#btnCats').onclick = () => { renderTree(); openSheet('cats'); };
-  $('#btnSettings').onclick = () => { renderStorage(); openSheet('settings'); };
+  $('#btnSettings').onclick = () => { renderStorage(); window.Push?.render(); openSheet('settings'); };
 
   // composer
   $('#cmpClose').onclick = closeComposer;
