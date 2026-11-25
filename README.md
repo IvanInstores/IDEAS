@@ -45,8 +45,15 @@ Configurazione una tantum del proprietario dell'app (vale per tutti gli utenti):
 
 OneDrive/SharePoint e Google Drive: richiedono la registrazione dell'app (Microsoft Entra ID / Google Cloud); il motore di sync è già pronto per aggiungerli.
 
-## Promemoria: limite da sapere
-Una web app non può "svegliarsi" da sola a telefono chiuso. Per avere la notifica all'ora esatta usare il pulsante **Google Calendar / Outlook / File calendario** nel dettaglio idea. Dentro l'app i promemoria scaduti compaiono nel banner rosso e come notifica quando la apri.
+## Notifiche promemoria (anche ad app chiusa)
+Server gratuito su **Cloudflare Workers + D1** (`server/`): https://idee-promemoria.idee-instores.workers.dev
+- Ogni minuto invia le notifiche dei promemoria scaduti (Web Push, VAPID).
+- Sul server ci sono solo: id casuale del dispositivo, id idea, ora, indirizzo push. **Nessun testo delle idee**: la notifica arriva vuota e il telefono la completa con i propri dati.
+- Attivazione: app → ⚙ → *Notifiche promemoria* → **Attiva notifiche** (o al primo promemoria). *Invia prova* per verificare.
+- iPhone: solo con l'app installata sulla schermata Home (iOS 16.4+).
+- Chiave privata VAPID: solo come segreto del Worker (`VAPID_PRIVATE_JWK`), mai nel repository. Chiave pubblica in `config.js`.
+- Ripubblicare: `cd server && npx wrangler deploy` (token Cloudflare con permessi Workers + D1 Modifica, salvato nell'ambiente di lavoro).
+- Piano gratuito Cloudflare: 100.000 richieste/giorno, cron ogni minuto, D1 500 MB.
 
 ## Regole e decisioni
 - Dati sul telefono (IndexedDB) + copia automatica su Dropbox `/09 - IDEE` quando collegato.

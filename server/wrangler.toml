@@ -11,4 +11,4 @@ crons = ["* * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "idee-promemoria"
-database_id = "DA-COMPILARE"
+database_id = "7f6eb2ec-c519-4292-bb82-78831d61a2fc"
