@@ -24,6 +24,7 @@
 <header class="topbar">
   <h1 class="brand">Idee<span class="brand-count" id="count"></span></h1>
   <div class="top-actions">
+    <button class="icon-btn sync-head" id="syncHead" aria-label="Sincronizza ora" hidden><i data-lucide="refresh-cw"></i></button>
     <button class="icon-btn" id="btnSearch" aria-label="Cerca"><i data-lucide="search"></i></button>
     <button class="icon-btn" id="btnCats" aria-label="Categorie"><i data-lucide="folder-tree"></i></button>
     <button class="icon-btn" id="btnSettings" aria-label="Impostazioni e backup"><i data-lucide="settings-2"></i></button>
@@ -38,6 +39,8 @@
 
 <nav class="chips" id="chips" aria-label="Filtra per categoria"></nav>
 <nav class="chips sub" id="subchips" aria-label="Sottocategorie" hidden></nav>
+<nav class="chips status" id="statuschips" aria-label="Filtra per stato"></nav>
+<button class="due-banner" id="dueBanner" hidden></button>
 
 <main id="list" class="list" aria-live="polite"></main>
 
@@ -64,10 +67,17 @@
   </div>
   <div class="sheet-body">
     <input id="cmpTitle" class="title-input" placeholder="Titolo (facoltativo)" maxlength="120">
-    <label class="cat-select">
-      <i data-lucide="folder"></i>
-      <select id="cmpCat" aria-label="Categoria"></select>
-    </label>
+    <div class="meta-row">
+      <label class="cat-select">
+        <i data-lucide="folder"></i>
+        <select id="cmpCat" aria-label="Categoria"></select>
+      </label>
+      <label class="cat-select">
+        <i data-lucide="flag"></i>
+        <select id="cmpStatus" aria-label="Stato"></select>
+      </label>
+      <button class="cat-select remind-btn" id="cmpRemind" type="button"></button>
+    </div>
     <div class="text-wrap">
       <textarea id="cmpText" placeholder="Scrivi l'idea, oppure dettala col microfono…" rows="5"></textarea>
       <div class="interim" id="interim"></div>
@@ -123,9 +133,14 @@
   </div>
   <div class="sheet-body">
     <div class="panel">
+      <h3><i data-lucide="cloud"></i>Sincronizzazione cloud</h3>
+      <p class="hint">Le idee e gli allegati vengono copiati nel cloud a ogni modifica. Usando lo stesso account su un altro telefono, le idee si uniscono.</p>
+      <div id="syncPanel"></div>
+    </div>
+    <div class="panel">
       <h3><i data-lucide="hard-drive"></i>Spazio usato</h3>
       <p id="storageInfo">Calcolo…</p>
-      <p class="hint">Le idee restano solo su questo telefono. Fai un backup ogni tanto e salvalo su OneDrive o Dropbox.</p>
+      <p class="hint">Senza sincronizzazione le idee restano solo su questo telefono: in quel caso fai un backup ogni tanto.</p>
     </div>
     <div class="panel">
       <h3><i data-lucide="download"></i>Esporta backup</h3>
@@ -182,9 +197,26 @@
   </form>
 </dialog>
 
+<dialog id="remDlg">
+  <div class="dlg">
+    <h3>Promemoria</h3>
+    <div class="rem-presets" id="remPresets"></div>
+    <label class="hint" for="remInput">Oppure scegli giorno e ora</label>
+    <input type="datetime-local" id="remInput">
+    <div class="row end">
+      <button type="button" class="btn ghost danger-text" id="remClear">Togli</button>
+      <span style="flex:1"></span>
+      <button type="button" class="btn ghost" id="remCancel">Annulla</button>
+      <button type="button" class="btn primary" id="remOk">Imposta</button>
+    </div>
+  </div>
+</dialog>
+
 <div class="toast" id="toast" role="status"></div>
 
 <script src="vendor/lucide.min.js"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
+<script src="sync.js"></script>
 </body>
 </html>

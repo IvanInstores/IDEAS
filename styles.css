@@ -365,6 +365,67 @@ dialog::backdrop { background: rgba(16,24,43,.5); }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+/* ---------- stati ---------- */
+.chips.status { padding-top: 0; }
+.chip.st { padding: 6px 12px; font-size: 13px; gap: 5px; }
+.chip.st svg { width: 15px; height: 15px; color: var(--c); }
+.chip.st b { font-weight: 800; opacity: .7; }
+.chip.st.on { background: var(--c); border-color: var(--c); color: #fff; }
+.chip.st.on svg { color: #fff; }
+.idea .catline { justify-content: space-between; }
+.idea .catline .cl { display: flex; gap: 6px; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sbadge {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700;
+  color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); padding: 2px 8px 2px 6px; border-radius: 99px;
+}
+.sbadge svg { width: 13px; height: 13px; }
+.idea .remind { grid-column: 2; display: inline-flex; gap: 5px; align-items: center; margin-top: 8px; font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.idea .remind svg { width: 15px; height: 15px; }
+.idea .remind.due, .rem-line.due { color: var(--coral); }
+.due-banner {
+  display: flex; align-items: center; gap: 10px; width: calc(100% - 32px); margin: 4px 16px 6px;
+  padding: 12px 14px; border-radius: var(--r-md); background: var(--coral); color: #fff; text-align: left; font-size: 14.5px;
+}
+.due-banner span:nth-child(2) { flex: 1; }
+.due-banner .bn-act { font-weight: 800; text-decoration: underline; }
+.due-banner svg { animation: pulse 1.6s ease-in-out infinite; }
+.due-banner.on { background: var(--ink); color: var(--paper); }
+.meta-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.remind-btn { padding: 10px 14px 10px 12px; font-weight: 600; }
+.remind-btn.set { border-color: var(--coral); color: var(--coral); }
+.remind-btn.set svg { color: var(--coral); }
+.det-section { margin: 22px 0 0; }
+.det-section h3 { font-size: 14px; color: var(--ink-soft); margin: 0 0 8px; font-weight: 700; }
+.status-pills, .rem-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.rem-actions { margin-top: 8px; }
+.spill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 99px; font-weight: 700; font-size: 14px;
+  background: var(--card); border: 1.5px solid var(--line); color: var(--ink); min-height: 40px;
+}
+.spill svg { width: 16px; height: 16px; color: var(--c); }
+.spill.on { background: var(--c); border-color: var(--c); color: #fff; transform: perspective(400px) translateZ(12px); box-shadow: 0 6px 14px -6px var(--c); transition: transform .25s cubic-bezier(.2,.9,.3,1.4); }
+.spill.on svg { color: #fff; }
+.rem-line { display: flex; gap: 8px; align-items: center; font-weight: 700; margin: 0; }
+.btn.small { min-height: 40px; padding: 8px 12px; font-size: 14px; }
+.rem-presets { display: flex; flex-direction: column; gap: 8px; }
+.rem-presets .chip { justify-content: space-between; width: 100%; padding: 12px 16px; font-size: 15px; }
+.rem-presets .chip small { color: var(--ink-soft); font-weight: 600; }
+#remInput { border: 1.5px solid var(--line); background: var(--paper); border-radius: var(--r-md); padding: 12px; font-size: 16px; }
+.danger-text { color: var(--coral); }
+
+/* ---------- sync ---------- */
+.prov { border: 1.5px solid var(--line); border-radius: var(--r-md); padding: 12px; margin-top: 10px; }
+.prov.active { border-color: var(--sage); }
+.prov.off { opacity: .65; }
+.prov-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.prov-head svg { width: 20px; height: 20px; }
+.prov .hint { margin: 0 0 10px; }
+.pill { margin-left: auto; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--paper); color: var(--ink-soft); }
+.pill.ok { background: color-mix(in srgb, var(--sage) 20%, transparent); color: var(--sage); }
+.sync-head.spin svg { animation: rot 1s linear infinite; }
+.sync-head.err { color: var(--coral); }
+@keyframes rot { to { transform: rotate(360deg); } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

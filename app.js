@@ -13,11 +13,11 @@ const DB = {
   db: null,
   open() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open('idee-db', 1);
+      const r = indexedDB.open('idee-db', 2);
       r.onupgradeneeded = () => {
         const d = r.result;
-        d.createObjectStore('ideas', { keyPath: 'id' });
-        d.createObjectStore('cats', { keyPath: 'id' });
+        for (const n of ['ideas', 'cats']) if (!d.objectStoreNames.contains(n)) d.createObjectStore(n, { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta');
       };
       r.onsuccess = () => { this.db = r.result; res(); };
       r.onerror = () => rej(r.error);
@@ -39,10 +39,37 @@ const DB = {
   put(store, v) { return this.write(store, s => s.put(v)); },
   putMany(store, arr) { return this.write(store, s => arr.forEach(v => s.put(v))); },
   del(store, id) { return this.write(store, s => s.delete(id)); },
+  getMeta(k) {
+    return new Promise(res => {
+      const r = this.db.transaction('meta').objectStore('meta').get(k);
+      r.onsuccess = () => res(r.result); r.onerror = () => res(undefined);
+    });
+  },
+  setMeta(k, v) { return this.write('meta', s => s.put(v, k)); },
 };
 
+/* ---------------- stati ---------------- */
+const STATUSES = [
+  { id: 'nuova', label: 'Nuova', icon: 'sparkles', color: '#4C7BD9' },
+  { id: 'valutazione', label: 'In valutazione', icon: 'scale', color: '#E9A21B' },
+  { id: 'corso', label: 'In corso', icon: 'hammer', color: '#8C63D6' },
+  { id: 'fatta', label: 'Fatta', icon: 'circle-check', color: '#5E9A84' },
+  { id: 'scartata', label: 'Scartata', icon: 'circle-x', color: '#8A93A8' },
+];
+const statusOf = id => STATUSES.find(x => x.id === id) || STATUSES[0];
+const isDue = i => i.remindAt && !i.remindDone && i.remindAt <= Date.now();
+function normalizeIdea(i) {
+  i.status ||= 'nuova';
+  i.statusHistory ||= [{ status: i.status, at: i.createdAt }];
+  i.updatedAt ||= i.createdAt;
+  i.remindAt ??= null;
+  return i;
+}
+// called after every local change: bump sync clock + schedule cloud sync
+function touched(i) { i.updatedAt = Date.now(); window.Sync?.schedule(); }
+
 /* ---------------- state ---------------- */
-const S = { ideas: [], cats: [], filter: null, q: '', urls: [] };
+const S = { ideas: [], cats: [], filter: null, status: null, due: false, q: '', urls: [] };
 
 const catById = id => S.cats.find(c => c.id === id);
 const children = id => S.cats.filter(c => (c.parentId || null) === (id || null)).sort((a, b) => a.name.localeCompare(b.name, 'it'));
@@ -136,12 +163,27 @@ function renderChips() {
     sub.innerHTML = `<button class="chip ${S.filter === active ? 'on' : ''}" data-f="${active}">Tutta «${esc(catById(active).name)}»</button>` +
       items.map(({ c, depth }) => `<button class="chip ${S.filter === c.id ? 'on' : ''}" data-f="${c.id}">${depth ? '· '.repeat(depth) : ''}${esc(c.name)}</button>`).join('');
   } else sub.hidden = true;
+  $('#statuschips').innerHTML = `<button class="chip ${!S.status ? 'on' : ''}" data-s="">Tutti gli stati</button>` +
+    STATUSES.map(st => {
+      const n = S.ideas.filter(i => i.status === st.id).length;
+      return `<button class="chip st ${S.status === st.id ? 'on' : ''}" data-s="${st.id}" style="--c:${st.color}"><i data-lucide="${st.icon}"></i>${st.label}${n ? ` <b>${n}</b>` : ''}</button>`;
+    }).join('');
+  const due = S.ideas.filter(isDue).length;
+  const bn = $('#dueBanner');
+  bn.hidden = !due && !S.due;
+  bn.classList.toggle('on', S.due);
+  bn.innerHTML = S.due
+    ? `<i data-lucide="bell-ring"></i><span><b>Da riprendere</b> — stai vedendo solo queste</span><span class="bn-act">Mostra tutte</span>`
+    : `<i data-lucide="bell-ring"></i><span><b>${due} ${due === 1 ? 'idea da riprendere' : 'idee da riprendere'}</b></span><span class="bn-act">Vedi</span>`;
+  try { navigator.setAppBadge?.(due || undefined).catch(() => {}); if (!due) navigator.clearAppBadge?.().catch(() => {}); } catch {}
 }
 function rootOf(id) { let c = catById(id), g = 0; while (c?.parentId && g++ < 20) c = catById(c.parentId); return c?.id; }
 
 function filteredIdeas() {
   let list = S.ideas;
+  if (S.due) return [...list.filter(isDue)].sort((a, b) => a.remindAt - b.remindAt);
   if (S.filter) { const set = descendants(S.filter); list = list.filter(i => set.has(i.catId)); }
+  if (S.status) list = list.filter(i => i.status === S.status);
   if (S.q) {
     const q = S.q.toLowerCase();
     list = list.filter(i => (i.title + ' ' + i.text + ' ' + catPath(i.catId)).toLowerCase().includes(q));
@@ -159,7 +201,7 @@ function renderList(enterId) {
     const none = !S.ideas.length;
     main.innerHTML = `<div class="empty"><div class="bulb"><i data-lucide="${none ? 'lightbulb' : 'search-x'}"></i></div>
       <h2>${none ? 'La prima idea ti aspetta' : 'Nessuna idea qui'}</h2>
-      <p>${none ? 'Tocca il cubo giallo e scrivi, detta, disegna, fotografa o registra.' : 'Prova un’altra categoria o un’altra parola.'}</p></div>`;
+      <p>${none ? 'Tocca il cubo giallo e scrivi, detta, disegna, fotografa o registra.' : 'Prova un’altra categoria, un altro stato o un’altra parola.'}</p></div>`;
     icons(); return;
   }
   let html = '', last = '';
@@ -178,9 +220,10 @@ function renderList(enterId) {
     const counts = countBlocks(i);
     html += `<button class="idea ${i.id === enterId ? 'enter' : ''}" data-id="${i.id}" ${col ? `style="--c:${col}"` : ''}>
       <span class="time">${fmtTime(i.createdAt)}</span>
-      <span class="catline">${i.catId ? `<span class="dot" style="--c:${col}"></span>${esc(catPath(i.catId))}` : 'Senza categoria'}</span>
+      <span class="catline"><span class="cl">${i.catId ? `<span class="dot" style="--c:${col}"></span>${esc(catPath(i.catId))}` : 'Senza categoria'}</span>${statusBadge(i)}</span>
       <h4>${esc(title)}</h4>
       ${body ? `<p>${esc(body)}</p>` : ''}
+      ${i.remindAt && !i.remindDone ? `<span class="remind ${isDue(i) ? 'due' : ''}"><i data-lucide="${isDue(i) ? 'bell-ring' : 'bell'}"></i>${esc(fmtRemind(i.remindAt))}</span>` : ''}
       ${imgs.length || counts.length ? `<span class="media-strip">
         ${imgs.map(b => `<img class="thumb" alt="" src="${track(URL.createObjectURL(b.blob))}">`).join('')}
         ${counts.map(([ic, n]) => `<span class="mtag"><i data-lucide="${ic}"></i>${n}</span>`).join('')}
@@ -189,6 +232,17 @@ function renderList(enterId) {
   }
   main.innerHTML = html;
   icons();
+}
+function statusBadge(i) {
+  const st = statusOf(i.status);
+  return `<span class="sbadge" style="--c:${st.color}"><i data-lucide="${st.icon}"></i>${st.label}</span>`;
+}
+function fmtRemind(ts) {
+  const d = new Date(ts), t = new Date(), tm = new Date(); tm.setDate(t.getDate() + 1);
+  const hm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === t.toDateString()) return 'Oggi ' + hm;
+  if (d.toDateString() === tm.toDateString()) return 'Domani ' + hm;
+  return d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + hm;
 }
 const firstLine = t => (t || '').trim().split('\n')[0].slice(0, 90);
 const restLines = t => (t || '').trim().split('\n').slice(1).join(' ').trim() || ((t || '').trim().length > 90 ? (t || '').trim().slice(90) : '');
@@ -218,8 +272,10 @@ function openComposer(idea = null, preset = null) {
   stopDictation();
   editingId = idea?.id || null;
   draft = idea ? { ...idea, blocks: idea.blocks.map(b => ({ ...b })) }
-    : { id: uid(), createdAt: Date.now(), title: '', text: '', catId: S.filter || null, blocks: [] };
+    : normalizeIdea({ id: uid(), createdAt: Date.now(), title: '', text: '', catId: S.filter || null, blocks: [] });
   $('#cmpTitle').value = draft.title;
+  $('#cmpStatus').innerHTML = STATUSES.map(st => `<option value="${st.id}" ${st.id === draft.status ? 'selected' : ''}>${st.label}</option>`).join('');
+  renderCmpRemind();
   $('#cmpText').value = draft.text;
   $('#cmpCat').innerHTML = catOptions(draft.catId);
   updateStamp();
@@ -260,8 +316,16 @@ async function saveDraft() {
   draft.title = $('#cmpTitle').value.trim();
   draft.text = $('#cmpText').value.trim();
   draft.catId = $('#cmpCat').value || null;
+  setStatus(draft, $('#cmpStatus').value);
   if (!draft.title && !draft.text && !draft.blocks.length) { toast('Aggiungi almeno un testo o un contenuto'); return; }
-  if (editingId) draft.updatedAt = Date.now();
+  if (editingId) {
+    draft.editedAt = Date.now();
+    const old = S.ideas.find(x => x.id === editingId);
+    const keep = new Set(draft.blocks.map(b => b.id));
+    const gone = (old?.blocks || []).filter(b => !keep.has(b.id) && b.remotePath).map(b => b.remotePath);
+    if (gone.length) window.Sync?.forget(gone);
+  }
+  touched(draft);
   try {
     await DB.put('ideas', draft);
   } catch (e) {
@@ -393,19 +457,41 @@ function openDetail(id) {
     <span class="det-cat">${i.catId ? `<span class="dot" style="--c:${col}"></span>${esc(catPath(i.catId))}` : 'Senza categoria'}</span>
     <h2 class="det-title">${esc(i.title || firstLine(i.text) || mediaTitle(i))}</h2>
     ${(i.title ? i.text : (i.text || '').trim().split('\n').slice(1).join('\n').trim()) ? `<p class="det-text">${esc(i.title ? i.text : (i.text || '').trim().split('\n').slice(1).join('\n').trim())}</p>` : ''}
-    <div class="det-media">${i.blocks.map(b => {
+    <div class="det-section">
+      <h3>Stato</h3>
+      <div class="status-pills">${STATUSES.map(st => `<button class="spill ${st.id === i.status ? 'on' : ''}" data-status="${st.id}" style="--c:${st.color}"><i data-lucide="${st.icon}"></i>${st.label}</button>`).join('')}</div>
+    </div>
+    <div class="det-section">
+      <h3>Promemoria</h3>
+      ${i.remindAt && !i.remindDone ? `
+        <p class="rem-line ${isDue(i) ? 'due' : ''}"><i data-lucide="${isDue(i) ? 'bell-ring' : 'bell'}"></i>${esc(fmtFull(i.remindAt))}</p>
+        <div class="rem-actions">
+          <button class="btn small" data-cal="google"><i data-lucide="calendar-plus"></i>Google Calendar</button>
+          <button class="btn small" data-cal="outlook"><i data-lucide="calendar-plus"></i>Outlook</button>
+          <button class="btn small" data-cal="ics"><i data-lucide="calendar-arrow-down"></i>File calendario</button>
+        </div>
+        <div class="rem-actions">
+          <button class="btn small" data-rem="edit"><i data-lucide="clock"></i>Sposta</button>
+          <button class="btn small" data-rem="done"><i data-lucide="check"></i>Ripresa, togli</button>
+        </div>`
+      : `<button class="btn small" data-rem="edit"><i data-lucide="bell-plus"></i>Imposta promemoria</button>`}
+    </div>
+    <div class="det-media" style="margin-top:22px">${i.blocks.map(b => {
       const u = URL.createObjectURL(b.blob);
       return b.type === 'video' ? `<video src="${u}" data-url="${u}" controls playsinline preload="metadata"></video>`
         : b.type === 'audio' ? `<audio src="${u}" data-url="${u}" controls preload="metadata"></audio>`
         : `<img src="${u}" data-url="${u}" alt="${b.type === 'drawing' ? 'Disegno' : 'Foto'}">`;
     }).join('')}</div>
-    <p class="det-meta">Creata ${esc(fmtFull(i.createdAt))}${i.updatedAt ? `<br>Modificata ${esc(fmtFull(i.updatedAt))}` : ''}</p>`;
+    <p class="det-meta">Creata ${esc(fmtFull(i.createdAt))}${i.editedAt ? `<br>Modificata ${esc(fmtFull(i.editedAt))}` : ''}
+      ${i.statusHistory.length > 1 ? '<br>' + i.statusHistory.slice(1).map(h => `${esc(statusOf(h.status).label)}: ${esc(fmtFull(h.at))}`).join('<br>') : ''}</p>`;
   $('#toast').classList.remove('show');
   openSheet('detail'); icons();
 }
 async function deleteCurrent() {
   const r = await ask({ title: 'Eliminare questa idea?', msg: 'Verranno eliminati anche foto, video, audio e disegni collegati.', okText: 'Elimina', input: false });
   if (!r) return;
+  const dead = S.ideas.find(x => x.id === currentId);
+  window.Sync?.tombstone(currentId, dead.blocks.filter(b => b.remotePath).map(b => b.remotePath));
   await DB.del('ideas', currentId);
   S.ideas = S.ideas.filter(x => x.id !== currentId);
   closeSheet('detail'); renderList(); toast('Idea eliminata');
@@ -445,15 +531,15 @@ async function addCat(parentId = null) {
   const parent = catById(parentId);
   const r = await ask({ title: parent ? `Sottocategoria di «${parent.name}»` : 'Nuova categoria', color: parent?.color || COLORS[S.cats.length % COLORS.length] });
   if (!r) return null;
-  const c = { id: uid(), name: r.value, color: r.color, parentId: parentId || null, createdAt: Date.now() };
-  await DB.put('cats', c); S.cats.push(c);
+  const c = { id: uid(), name: r.value, color: r.color, parentId: parentId || null, createdAt: Date.now(), updatedAt: Date.now() };
+  await DB.put('cats', c); S.cats.push(c); window.Sync?.schedule();
   renderTree(); renderList(); return c;
 }
 async function editCat(id) {
   const c = catById(id);
   const r = await ask({ title: 'Rinomina categoria', value: c.name, color: c.color });
   if (!r) return;
-  c.name = r.value; c.color = r.color; await DB.put('cats', c);
+  c.name = r.value; c.color = r.color; c.updatedAt = Date.now(); await DB.put('cats', c); window.Sync?.schedule();
   renderTree(); renderList();
 }
 async function delCat(id) {
@@ -464,8 +550,9 @@ async function delCat(id) {
   const r = await ask({ title: `Eliminare «${c.name}»?`, input: false, okText: 'Elimina',
     msg: `${n ? `${n} ${n === 1 ? 'idea passa' : 'idee passano'} a ${to}. ` : ''}${kids.length ? `Le ${kids.length} sottocategorie salgono di un livello. ` : ''}Nessuna idea viene cancellata.` });
   if (!r) return;
-  const movedIdeas = S.ideas.filter(i => i.catId === id); movedIdeas.forEach(i => i.catId = c.parentId || null);
-  kids.forEach(k => k.parentId = c.parentId || null);
+  const movedIdeas = S.ideas.filter(i => i.catId === id); movedIdeas.forEach(i => { i.catId = c.parentId || null; touched(i); });
+  kids.forEach(k => { k.parentId = c.parentId || null; k.updatedAt = Date.now(); });
+  window.Sync?.tombstoneCat(id);
   if (movedIdeas.length) await DB.putMany('ideas', movedIdeas);
   if (kids.length) await DB.putMany('cats', kids);
   await DB.del('cats', id); S.cats = S.cats.filter(x => x.id !== id);
@@ -499,7 +586,8 @@ async function importBackup(file) {
     }
     if (cats.length) await DB.putMany('cats', cats);
     if (ideas.length) await DB.putMany('ideas', ideas);
-    S.cats.push(...cats); S.ideas.push(...ideas);
+    ideas.forEach(normalizeIdea);
+    S.cats.push(...cats); S.ideas.push(...ideas); window.Sync?.schedule();
     renderList(); renderStorage();
     toast(`Ripristinate ${ideas.length} idee e ${cats.length} categorie`);
   } catch (e) { console.error(e); toast('File non valido: scegli un backup di Idee'); }
@@ -510,6 +598,121 @@ async function renderStorage() {
   const n = S.ideas.length, m = S.ideas.reduce((a, i) => a + i.blocks.length, 0);
   el.textContent = `${n} idee, ${m} allegati` + (est ? ` · ${(est.usage / 1048576).toFixed(1)} MB usati su ${(est.quota / 1073741824).toFixed(1)} GB disponibili` : '');
 }
+
+/* ---------------- STATO ---------------- */
+function setStatus(i, st) {
+  if (!st || st === i.status) return false;
+  i.status = st;
+  i.statusHistory = [...(i.statusHistory || []), { status: st, at: Date.now() }];
+  return true;
+}
+async function changeStatus(id, st) {
+  const i = S.ideas.find(x => x.id === id);
+  if (!i || !setStatus(i, st)) return;
+  touched(i); await DB.put('ideas', i);
+  openDetail(id); renderList();
+  toast('Stato: ' + statusOf(st).label);
+}
+
+/* ---------------- PROMEMORIA ---------------- */
+function presetTimes() {
+  const at = (d, h, m = 0) => { const x = new Date(d); x.setHours(h, m, 0, 0); return x.getTime(); };
+  const now = new Date(), tom = new Date(); tom.setDate(now.getDate() + 1);
+  const mon = new Date(); mon.setDate(now.getDate() + ((8 - now.getDay()) % 7 || 7));
+  const week = new Date(); week.setDate(now.getDate() + 7);
+  const month = new Date(); month.setMonth(now.getMonth() + 1);
+  const out = [];
+  if (now.getHours() < 17) out.push(['Stasera', at(now, 18)]);
+  out.push(['Domani mattina', at(tom, 9)], ['Lunedì', at(mon, 9)], ['Tra una settimana', at(week, 9)], ['Tra un mese', at(month, 9)]);
+  return out;
+}
+const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 6e4); return d.toISOString().slice(0, 16); };
+function pickReminder(current) {
+  const d = $('#remDlg');
+  $('#remPresets').innerHTML = presetTimes().map(([l, ts]) =>
+    `<button type="button" class="chip" data-ts="${ts}">${l}<small>${esc(fmtRemind(ts))}</small></button>`).join('');
+  const inp = $('#remInput');
+  inp.value = toLocalInput(current || presetTimes()[0][1]);
+  inp.min = toLocalInput(Date.now());
+  $('#remClear').hidden = !current;
+  d.showModal(); icons();
+  return new Promise(res => {
+    $('#remPresets').onclick = e => { const b = e.target.closest('[data-ts]'); if (b) { d.close(); res(+b.dataset.ts); } };
+    $('#remClear').onclick = () => { d.close(); res(0); };
+    $('#remOk').onclick = () => { const v = new Date(inp.value).getTime(); d.close(); res(isNaN(v) ? undefined : v); };
+    $('#remCancel').onclick = () => { d.close(); res(undefined); };
+    d.oncancel = () => res(undefined);
+  });
+}
+function renderCmpRemind() {
+  const has = draft.remindAt && !draft.remindDone;
+  $('#cmpRemind').innerHTML = `<i data-lucide="${has ? 'bell' : 'bell-plus'}"></i><span>${has ? esc(fmtRemind(draft.remindAt)) : 'Promemoria'}</span>`;
+  $('#cmpRemind').classList.toggle('set', !!has);
+  icons();
+}
+function applyReminder(i, ts) {
+  if (ts === undefined) return false;
+  if (ts === 0) { i.remindAt = null; i.remindDone = false; return true; }
+  i.remindAt = ts; i.remindDone = false; i.remindNotified = false;
+  Reminders.askPermission();
+  return true;
+}
+async function editReminderOf(id) {
+  const i = S.ideas.find(x => x.id === id); if (!i) return;
+  const ts = await pickReminder(i.remindDone ? null : i.remindAt);
+  if (!applyReminder(i, ts)) return;
+  touched(i); await DB.put('ideas', i);
+  openDetail(id); renderList();
+  toast(ts ? 'Promemoria: ' + fmtRemind(ts) : 'Promemoria tolto');
+}
+async function reminderDone(id) {
+  const i = S.ideas.find(x => x.id === id); if (!i) return;
+  i.remindDone = true; touched(i); await DB.put('ideas', i);
+  openDetail(id); renderList(); toast('Promemoria completato');
+}
+function calendarLink(i, kind) {
+  const title = '💡 ' + (i.title || firstLine(i.text) || 'Idea');
+  const desc = [i.text, i.catId ? 'Categoria: ' + catPath(i.catId) : '', 'Apri Idee: ' + location.origin + location.pathname].filter(Boolean).join('\n\n');
+  const start = new Date(i.remindAt), end = new Date(i.remindAt + 15 * 6e4);
+  const z = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  if (kind === 'google') return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${z(start)}/${z(end)}&details=${encodeURIComponent(desc)}`;
+  if (kind === 'outlook') return `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${start.toISOString()}&enddt=${end.toISOString()}&body=${encodeURIComponent(desc)}`;
+  const icsEsc = t => String(t).replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Idee//IT', 'BEGIN:VEVENT', `UID:${i.id}@idee`, `DTSTAMP:${z(new Date())}`,
+    `DTSTART:${z(start)}`, `DTEND:${z(end)}`, `SUMMARY:${icsEsc(title)}`, `DESCRIPTION:${icsEsc(desc)}`,
+    'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(title)}`, 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+}
+async function addToCalendar(id, kind) {
+  const i = S.ideas.find(x => x.id === id); if (!i?.remindAt) return;
+  if (kind !== 'ics') { window.open(calendarLink(i, kind), '_blank'); return; }
+  const file = new File([calendarLink(i, 'ics')], 'promemoria-idea.ics', { type: 'text/calendar' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+// In-app notifications: only while the app is open or reopened (a web app cannot wake up by itself).
+const Reminders = {
+  start() { this.check(); setInterval(() => this.check(), 30000); document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && this.check()); },
+  async askPermission() {
+    try { if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission(); } catch {}
+  },
+  async check() {
+    const fresh = S.ideas.filter(i => isDue(i) && !i.remindNotified);
+    if (!fresh.length) return;
+    for (const i of fresh) {
+      i.remindNotified = true; await DB.put('ideas', i);
+      const title = i.title || firstLine(i.text) || 'Idea';
+      try {
+        if (Notification?.permission === 'granted') {
+          const reg = await navigator.serviceWorker?.getRegistration();
+          const opts = { body: 'Promemoria: è il momento di riprendere questa idea', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: i.id, data: { id: i.id } };
+          reg ? reg.showNotification('💡 ' + title, opts) : new Notification('💡 ' + title, opts);
+        }
+      } catch {}
+    }
+    if (document.visibilityState === 'visible') toast(fresh.length === 1 ? 'Hai un’idea da riprendere' : `Hai ${fresh.length} idee da riprendere`);
+    renderList();
+  },
+};
 
 /* ---------------- events ---------------- */
 function bind() {
@@ -526,6 +729,14 @@ function bind() {
     S.filter = b.dataset.f || null; renderList();
   };
   $('#chips').onclick = onChip; $('#subchips').onclick = onChip;
+  $('#statuschips').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; S.status = b.dataset.s || null; renderList(); };
+  $('#dueBanner').onclick = () => { S.due = !S.due; renderList(); scrollTo({ top: 0, behavior: 'smooth' }); };
+  $('#cmpRemind').onclick = async () => { const ts = await pickReminder(draft.remindDone ? null : draft.remindAt); if (applyReminder(draft, ts)) renderCmpRemind(); };
+  $('#detBody').onclick = e => {
+    const st = e.target.closest('[data-status]'); if (st) return changeStatus(currentId, st.dataset.status);
+    const cal = e.target.closest('[data-cal]'); if (cal) return addToCalendar(currentId, cal.dataset.cal);
+    const rm = e.target.closest('[data-rem]'); if (rm) return rm.dataset.rem === 'done' ? reminderDone(currentId) : editReminderOf(currentId);
+  };
   $('#btnSearch').onclick = () => { $('#searchbar').hidden = false; $('#q').focus(); };
   $('#btnSearchClose').onclick = () => { $('#searchbar').hidden = true; $('#q').value = ''; S.q = ''; renderList(); };
   $('#q').oninput = e => { S.q = e.target.value.trim(); renderList(); };
@@ -603,6 +814,9 @@ function bind() {
   });
 
   // shortcuts from the home-screen icon (manifest shortcuts)
+  const openId = new URLSearchParams(location.search).get('open');
+  if (openId) setTimeout(() => openDetail(openId), 300);
+  navigator.serviceWorker?.addEventListener('message', e => e.data?.open && openDetail(e.data.open));
   const a = new URLSearchParams(location.search).get('a');
   if (a) {
     const presets = { foto: () => $('#inPhoto').click(), voce: startAudio, disegno: openDraw, detta: startDictation };
@@ -614,6 +828,7 @@ function topLayerCloser() {
   if (!$('#recorder').hidden) return () => $('#recCancel').click();
   if (!$('#draw').hidden) return () => { $('#draw').hidden = true; };
   if ($('#dlg').open) return () => $('#dlg').close();
+  if ($('#remDlg').open) return () => $('#remCancel').click();
   if (!$('#composer').hidden) return closeComposer;
   for (const s of ['detail', 'cats', 'settings']) if (!$('#' + s).hidden) return () => closeSheet(s);
   return null;
@@ -641,10 +856,12 @@ async function seed() {
   try { await DB.open(); }
   catch { $('#list').innerHTML = '<div class="empty"><h2>Memoria non disponibile</h2><p>Apri l’app fuori dalla navigazione privata.</p></div>'; return; }
   S.cats = await DB.all('cats');
-  S.ideas = await DB.all('ideas');
+  S.ideas = (await DB.all('ideas')).map(normalizeIdea);
   if (!S.cats.length && !S.ideas.length && !localStorage.getItem('idee-seeded')) { S.cats = await seed(); try { localStorage.setItem('idee-seeded', '1'); } catch {} }
   bind();
   renderList();
+  Reminders.start();
+  window.Sync?.init();
   navigator.storage?.persist?.().catch(() => {});
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

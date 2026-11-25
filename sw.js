@@ -1,6 +1,6 @@
 // Offline cache: app shell cache-first, Google Fonts at runtime.
-const V = 'idee-v2';
-const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'vendor/lucide.min.js', 'manifest.webmanifest',
+const V = 'idee-v3';
+const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'sync.js', 'config.js', 'vendor/lucide.min.js', 'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
@@ -22,4 +22,15 @@ self.addEventListener('fetch', e => {
     if (res.ok || res.type === 'opaque') { const cp = res.clone(); caches.open(V).then(c => c.put(r, cp)); }
     return res;
   })));
+});
+
+// tap on a reminder notification -> open that idea
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const id = e.notification.data?.id;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const c = list[0];
+    if (c) { c.postMessage({ open: id }); return c.focus(); }
+    return self.clients.openWindow('./?open=' + encodeURIComponent(id || ''));
+  }));
 });
