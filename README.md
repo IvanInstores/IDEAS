@@ -58,6 +58,8 @@ Server gratuito su **Cloudflare Workers + D1** (`server/`): https://idee-promemo
 - Piano gratuito Cloudflare: 100.000 richieste/giorno, cron ogni minuto, D1 500 MB.
 
 ## Regole e decisioni
+- OneDrive e Google Drive: si attivano solo quando un utente li chiederà (decisione 25/11/2026).
+- Nessun riepilogo email settimanale (decisione 25/11/2026).
 - Dati sul telefono (IndexedDB) + copia automatica su Dropbox `/09 - IDEE` quando collegato.
 - Eliminare una categoria non cancella idee: passano alla categoria superiore; le sottocategorie salgono di livello.
 - Categorie iniziali di esempio: Store (Allestimento, Cuneo – nuova apertura), Vendite (Venditori, Clienti), Marketing, Organizzazione (Automazioni), Personale. Modificabili.
