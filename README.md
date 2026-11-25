@@ -59,6 +59,7 @@ Server gratuito su **Cloudflare Workers + D1** (`server/`): https://idee-promemo
 - Piano gratuito Cloudflare: 100.000 richieste/giorno, cron ogni minuto, D1 500 MB.
 
 ## Regole e decisioni
+- **Dove si salva il progetto Idee: SOLO su GitHub (questo repository).** Mai su SharePoint, OneDrive o nell'archivio aziendale Instores (Ivan, 25/11/2026). Decisioni e stato: `docs/Decisioni_App_Idee_2026-11-25.md`.
 - OneDrive e Google Drive: si attivano solo quando un utente li chiederà (decisione 25/11/2026).
 - Nessun riepilogo email settimanale (decisione 25/11/2026).
 - Dati sul telefono (IndexedDB) + copia automatica su Dropbox `/09 - IDEE` quando collegato.
