@@ -18,14 +18,14 @@ const safeName = t => (t || '').replace(/[\\/:*?"<>|#%\u0000-\u001f]/g, ' ').rep
 const Dropbox = {
   id: 'dropbox',
   label: 'Dropbox',
-  appKey() { return CONFIG.dropboxAppKey || localStorage.getItem('idee-dbx-key') || ''; },
+  appKey() { return CONFIG.dropboxAppKey || ''; },
   async connect() {
     const key = this.appKey();
     if (!key) throw new Error('nokey');
     const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
     const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
     const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
-    localStorage.setItem('idee-oauth', JSON.stringify({ verifier, state, provider: 'dropbox' }));
+    localStorage.setItem('idee-oauth', JSON.stringify({ verifier, state, provider: 'dropbox', reconnect: !!Sync.cfg?.folder }));
     const u = new URL('https://www.dropbox.com/oauth2/authorize');
     Object.entries({ client_id: key, response_type: 'code', code_challenge: challenge, code_challenge_method: 'S256',
       token_access_type: 'offline', redirect_uri: REDIRECT, state }).forEach(([k, v]) => u.searchParams.set(k, v));
@@ -74,13 +74,23 @@ const Dropbox = {
     return r.blob();
   },
   remove(auth, path) { return this.rpc(auth, 'files/delete_v2', { path }); },
+  async folders(auth) {
+    let r = await this.rpc(auth, 'files/list_folder', { path: '', recursive: false, limit: 500 });
+    const out = [];
+    while (r) {
+      out.push(...r.entries.filter(e => e['.tag'] === 'folder').map(e => e.path_display));
+      r = r.has_more ? await this.rpc(auth, 'files/list_folder/continue', { cursor: r.cursor }) : null;
+    }
+    return out.sort((a, b) => a.localeCompare(b, 'it'));
+  },
+  async mkdir(auth, path) { await this.rpc(auth, 'files/create_folder_v2', { path, autorename: false }); },
   async revoke(auth) { try { await fetch('https://api.dropboxapi.com/2/auth/token/revoke', { method: 'POST', headers: { Authorization: 'Bearer ' + await this.token(auth) } }); } catch {} },
 };
 
 // Provider pronti a essere attivati: servono le registrazioni app (Microsoft Entra / Google Cloud).
 const PLANNED = [
-  { id: 'onedrive', label: 'OneDrive / SharePoint', note: 'Da attivare: serve registrare l’app in Microsoft 365 (Entra ID).' },
-  { id: 'gdrive', label: 'Google Drive', note: 'Da attivare: serve registrare l’app in Google Cloud.' },
+  { id: 'onedrive', label: 'OneDrive', note: 'In arrivo' },
+  { id: 'gdrive', label: 'Google Drive', note: 'In arrivo' },
 ];
 const PROVIDERS = { dropbox: Dropbox };
 
@@ -91,12 +101,12 @@ const Sync = {
   busy: false, timer: null, lastAuto: 0,
 
   get p() { return this.cfg && PROVIDERS[this.cfg.provider]; },
-  get on() { return !!(this.cfg?.auth?.refresh && this.p); },
+  get on() { return !!(this.cfg?.auth?.refresh && this.p && this.cfg.folder); },
   async saveAuth() { await DB.setMeta('sync', this.cfg); },
   async saveTomb() { await DB.setMeta('tomb', this.tomb); },
 
   async init() {
-    this.cfg = (await DB.getMeta('sync')) || { provider: 'dropbox', folder: '/09 - IDEE' };
+    this.cfg = (await DB.getMeta('sync')) || { provider: 'dropbox', folder: null };
     this.tomb = (await DB.getMeta('tomb')) || { ideas: {}, cats: {}, files: [] };
     await this.handleRedirect();
     this.render();
@@ -118,10 +128,11 @@ const Sync = {
       this.cfg.provider = pending.provider;
       this.cfg.auth = await PROVIDERS[pending.provider].finish(code, pending);
       this.cfg.lastError = null;
+      if (!pending.reconnect) this.cfg.folder = null;
       await this.saveAuth();
-      toast(PROVIDERS[pending.provider].label + ' collegato: sincronizzo…');
-      setTimeout(() => this.run('manual'), 400);
-    } catch (e) { console.error(e); toast('Collegamento non riuscito, riprova'); }
+      if (pending.reconnect && this.cfg.folder) { toast(PROVIDERS[pending.provider].label + ' ricollegato'); setTimeout(() => this.run('manual'), 400); }
+      else Wizard.open('folder');
+    } catch (e) { console.error(e); Wizard.open('error'); }
   },
 
   schedule(ms = 3000) {
@@ -210,13 +221,13 @@ const Sync = {
       await p.upload(auth, this.path('Elenco idee.md'), new Blob([this.markdown()], { type: 'text/markdown' }));
 
       this.tomb.ideas = {}; this.tomb.cats = {}; await this.saveTomb();
-      this.cfg.lastSync = Date.now(); this.cfg.lastError = null; await this.saveAuth();
+      this.cfg.lastSync = Date.now(); this.cfg.lastError = null; this.cfg.authExpired = false; await this.saveAuth();
       renderList();
       if (mode === 'manual' || pulled) toast(`Sincronizzato${pulled ? ` · ${pulled} idee ricevute` : ''}${pushed ? ` · ${pushed} allegati caricati` : ''}`);
     } catch (e) {
       console.error(e);
       this.cfg.lastError = e.message === 'auth' ? 'Accesso scaduto: ricollega ' + p.label : 'Ultimo tentativo non riuscito (' + e.message + ')';
-      if (e.message === 'auth') this.cfg.auth = null;
+      if (e.message === 'auth') this.cfg.authExpired = true;
       await this.saveAuth();
       if (mode === 'manual') toast(this.cfg.lastError);
     } finally { this.busy = false; this.render(); }
@@ -243,25 +254,13 @@ const Sync = {
     return lines.join('\n');
   },
 
-  async connect(provider) {
-    const p = PROVIDERS[provider];
-    if (!p.appKey()) {
-      const r = await ask({ title: 'Chiave app Dropbox', msg: 'Incolla la “App key” della tua app Dropbox (una volta sola).' });
-      if (!r) return;
-      localStorage.setItem('idee-dbx-key', r.value);
-    }
-    const r = await ask({ title: 'Cartella su ' + p.label, value: this.cfg.folder || '/09 - IDEE', msg: 'Le idee verranno salvate qui.', okText: 'Collega' });
-    if (!r) return;
-    this.cfg.folder = '/' + r.value.replace(/^\/+|\/+$/g, '');
-    this.cfg.provider = provider; await this.saveAuth();
-    try { await p.connect(); } catch (e) { toast('Manca la chiave app: vedi README'); }
-  },
+  connect() { Wizard.open('provider'); },
   async disconnect() {
     const r = await ask({ title: 'Scollegare ' + this.p.label + '?', input: false, okText: 'Scollega',
       msg: 'Le idee restano sul telefono e i file restano nel cloud. La sincronizzazione si ferma.' });
     if (!r) return;
     await this.p.revoke(this.cfg.auth);
-    this.cfg.auth = null; this.cfg.lastSync = null; await this.saveAuth(); this.render();
+    this.cfg.auth = null; this.cfg.lastSync = null; this.cfg.folder = null; await this.saveAuth(); this.render();
     toast('Scollegato');
   },
 
@@ -284,8 +283,10 @@ const Sync = {
           ${active ? `<span class="pill ok">Attivo</span>` : ''}</div>
         <p class="hint">${esc(status)}${active ? `<br>Cartella: <b>${esc(this.cfg.folder)}</b>` : ''}</p>
         <div class="row">${active
-          ? `<button class="btn" data-sync="now"><i data-lucide="refresh-cw"></i>Sincronizza ora</button>
-             <button class="btn ghost" data-sync="off">Scollega</button>`
+          ? (this.cfg.authExpired
+              ? `<button class="btn primary" data-sync="relogin"><i data-lucide="log-in"></i>Accedi di nuovo</button>`
+              : `<button class="btn" data-sync="now"><i data-lucide="refresh-cw"></i>Sincronizza ora</button>`) +
+            `<button class="btn ghost" data-sync="off">Scollega</button>`
           : this.on ? '' : `<button class="btn primary" data-sync="connect" data-p="${p.id}"><i data-lucide="link"></i>Collega ${p.label}</button>`}
         </div></div>`;
     }).join('') + PLANNED.map(p => `<div class="prov off">
@@ -297,11 +298,103 @@ const Sync = {
   bind() {
     $('#syncPanel').onclick = e => {
       const b = e.target.closest('[data-sync]'); if (!b) return;
-      ({ now: () => this.run('manual'), off: () => this.disconnect(), connect: () => this.connect(b.dataset.p) })[b.dataset.sync]();
+      ({ now: () => this.run('manual'), off: () => this.disconnect(), connect: () => this.connect(),
+         relogin: () => this.p.connect().catch(() => toast('Collegamento non disponibile')) })[b.dataset.sync]();
     };
     $('#syncHead').onclick = () => this.run('manual');
   },
 };
+/* ---------------- collegamento guidato ---------------- */
+const Wizard = {
+  open(step, extra) {
+    if (!$('#settings').hidden) closeSheet('settings');
+    openSheet('wizard'); this.show(step, extra);
+  },
+  close() { closeSheet('wizard'); Sync.render(); },
+  steps: ['provider', 'login', 'folder', 'done'],
+  show(step, extra) {
+    const n = this.steps.indexOf(step);
+    $('#wizDots').innerHTML = this.steps.map((_, k) => `<span class="${k <= n ? 'on' : ''}"></span>`).join('');
+    const body = $('#wizBody');
+    const p = Dropbox;
+    if (step === 'provider') {
+      body.innerHTML = `<h2>Dove salvo le tue idee?</h2>
+        <p class="lead">Scegli il cloud: idee e allegati verranno copiati lì in automatico, così non li perdi e li ritrovi su altri telefoni.</p>
+        <button class="wiz-opt" data-go="login"><i data-lucide="box"></i><span><b>Dropbox</b><small>Pronto</small></span><i data-lucide="chevron-right"></i></button>
+        ${PLANNED.map(x => `<div class="wiz-opt off"><i data-lucide="cloud"></i><span><b>${x.label}</b><small>${x.note}</small></span></div>`).join('')}`;
+    }
+    if (step === 'login') {
+      const ok = !!p.appKey();
+      body.innerHTML = `<h2>Accedi a Dropbox</h2>
+        <ol class="wiz-list">
+          <li>Tocca <b>Accedi a Dropbox</b>: si apre la pagina di Dropbox.</li>
+          <li>Entra con il tuo account (se non sei già dentro).</li>
+          <li>Tocca <b>Consenti</b>. L’app userà solo la cartella che scegli al passo successivo.</li>
+          <li>Tornerai qui da solo per scegliere la cartella.</li>
+        </ol>
+        ${ok ? `<button class="btn primary wide" data-go="auth"><i data-lucide="log-in"></i>Accedi a Dropbox</button>`
+             : `<p class="wiz-warn"><i data-lucide="triangle-alert"></i>Il collegamento a Dropbox non è ancora attivo in questa versione dell’app. Riprova dopo il prossimo aggiornamento.</p>`}
+        <button class="btn ghost wide" data-go="provider">Indietro</button>`;
+    }
+    if (step === 'folder') {
+      body.innerHTML = `<h2>Scegli la cartella</h2>
+        <p class="lead">Le idee verranno salvate in questa cartella del tuo Dropbox.</p>
+        <div id="wizFolders" class="wiz-folders"><p class="hint">Carico le cartelle…</p></div>
+        <div class="wiz-new">
+          <input id="wizNew" placeholder="Nome nuova cartella" value="Idee" maxlength="60">
+          <button class="btn" data-go="mkdir"><i data-lucide="folder-plus"></i>Crea</button>
+        </div>`;
+      p.folders(Sync.cfg.auth).then(list => {
+        const box = $('#wizFolders');
+        box.innerHTML = list.length ? list.map(f => `<button class="wiz-opt small" data-folder="${esc(f)}"><i data-lucide="folder"></i><span><b>${esc(f.slice(1))}</b></span><i data-lucide="chevron-right"></i></button>`).join('')
+          : '<p class="hint">Nessuna cartella: creane una qui sotto.</p>';
+        icons();
+      }).catch(() => { $('#wizFolders').innerHTML = '<p class="hint">Non riesco a leggere le cartelle: creane una nuova qui sotto.</p>'; });
+    }
+    if (step === 'done') {
+      body.innerHTML = `<div class="wiz-ok"><i data-lucide="cloud-upload"></i></div>
+        <h2>Collegato!</h2>
+        <p class="lead">Le idee si salvano in <b>${esc(Sync.cfg.folder)}</b>.</p>
+        <p class="hint" id="wizProgress">Prima sincronizzazione in corso…</p>
+        <ul class="wiz-list plain">
+          <li><b>Elenco idee.md</b>: l’elenco leggibile anche dal PC</li>
+          <li><b>Allegati</b>: foto, video, audio e disegni</li>
+          <li><b>_app</b>: dati dell’app, da non toccare</li>
+        </ul>
+        <button class="btn primary wide" data-go="close">Fatto</button>`;
+    }
+    if (step === 'error') {
+      body.innerHTML = `<h2>Collegamento non riuscito</h2>
+        <p class="lead">Dropbox non ha confermato l’accesso. Controlla la connessione e riprova.</p>
+        <button class="btn primary wide" data-go="login">Riprova</button>
+        <button class="btn ghost wide" data-go="close">Chiudi</button>`;
+    }
+    icons();
+  },
+  async choose(folder) {
+    Sync.cfg.folder = folder; Sync.cfg.authExpired = false; await Sync.saveAuth();
+    this.show('done');
+    await Sync.run('wizard');
+    const el = $('#wizProgress');
+    if (el) el.textContent = Sync.cfg.lastError || 'Sincronizzazione completata ✓';
+  },
+  bind() {
+    $('#wizClose').onclick = () => this.close();
+    $('#wizBody').onclick = async e => {
+      const f = e.target.closest('[data-folder]'); if (f) return this.choose(f.dataset.folder);
+      const b = e.target.closest('[data-go]'); if (!b) return;
+      const go = b.dataset.go;
+      if (go === 'auth') return Dropbox.connect().catch(() => toast('Collegamento non disponibile'));
+      if (go === 'close') return this.close();
+      if (go === 'mkdir') {
+        const name = safeName($('#wizNew').value); if (!name) return;
+        try { await Dropbox.mkdir(Sync.cfg.auth, '/' + name); } catch { toast('Non riesco a creare la cartella'); return; }
+        return this.choose('/' + name);
+      }
+      this.show(go);
+    };
+  },
+};
 window.Sync = Sync;
-document.addEventListener('DOMContentLoaded', () => Sync.bind());
-if (document.readyState !== 'loading') Sync.bind();
+const bindAll = () => { Sync.bind(); Wizard.bind(); };
+document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', bindAll) : bindAll();

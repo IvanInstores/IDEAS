@@ -426,6 +426,34 @@ dialog::backdrop { background: rgba(16,24,43,.5); }
 .sync-head.err { color: var(--coral); }
 @keyframes rot { to { transform: rotate(360deg); } }
 
+/* ---------- wizard ---------- */
+.wiz-dots { display: flex; gap: 6px; justify-content: center; }
+.wiz-dots span { width: 26px; height: 5px; border-radius: 9px; background: var(--line); }
+.wiz-dots span.on { background: var(--ink); }
+.wiz h2 { font-family: var(--display); font-weight: 800; font-size: 28px; letter-spacing: -0.03em; margin: 8px 0 8px; line-height: 1.1; }
+.wiz .lead { color: var(--ink-soft); font-size: 16px; margin: 0 0 20px; max-width: 40ch; }
+.wiz-opt {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 16px; margin-bottom: 10px;
+  background: var(--card); border-radius: var(--r-lg); box-shadow: var(--shadow); border: 1.5px solid transparent;
+}
+.wiz-opt span { flex: 1; display: flex; flex-direction: column; }
+.wiz-opt small { color: var(--ink-soft); font-weight: 600; }
+.wiz-opt > svg:first-child { width: 28px; height: 28px; color: #0061FE; }
+.wiz-opt.off { opacity: .5; box-shadow: none; border-color: var(--line); background: transparent; }
+.wiz-opt.off > svg:first-child { color: var(--ink-soft); }
+.wiz-opt.small { padding: 12px 14px; margin-bottom: 8px; }
+.wiz-opt.small > svg:first-child { width: 22px; height: 22px; color: var(--ink-soft); }
+.wiz-list { padding-left: 22px; margin: 0 0 22px; display: grid; gap: 10px; font-size: 16px; }
+.wiz-list.plain { list-style: none; padding: 0; font-size: 14.5px; color: var(--ink-soft); }
+.btn.wide { width: 100%; margin-bottom: 10px; min-height: 52px; font-size: 16px; }
+.wiz-warn { display: flex; gap: 10px; background: color-mix(in srgb, var(--coral) 14%, transparent); padding: 12px; border-radius: var(--r-md); }
+.wiz-folders { max-height: 46vh; overflow-y: auto; margin-bottom: 12px; }
+.wiz-new { display: flex; gap: 8px; }
+.wiz-new input { flex: 1; min-width: 0; border: 1.5px solid var(--line); background: var(--card); border-radius: 99px; padding: 0 16px; font-size: 16px; }
+.wiz-ok { width: 96px; height: 96px; border-radius: 30px; background: var(--sage); color: #fff; display: grid; place-items: center; margin: 12px 0 8px;
+  animation: popIn .6s cubic-bezier(.2,.9,.3,1.3) both; }
+.wiz-ok svg { width: 46px; height: 46px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

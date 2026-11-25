@@ -34,12 +34,14 @@ Struttura in `/09 - IDEE`:
 
 Funzionamento: sincronizza da sola 3 secondi dopo ogni modifica, all'apertura dell'app e al ritorno della rete. Più telefoni con lo stesso Dropbox si uniscono (vince la modifica più recente). Le idee cancellate vengono tolte anche dal cloud.
 
-Attivazione (una volta): creare un'app su https://www.dropbox.com/developers/apps
+Collegamento per l'utente: app → ⚙ → *Collega Dropbox* → procedura guidata (scegli cloud → accedi → Consenti → scegli o crea la cartella → prima sincronizzazione).
+
+Configurazione una tantum del proprietario dell'app (vale per tutti gli utenti): creare l'app su https://www.dropbox.com/developers/apps
 1. *Create app* → **Scoped access** → **Full Dropbox** → nome es. `Idee Instores`
-2. Scheda *Permissions*: spuntare `files.content.write` e `files.content.read` → **Submit**
-3. Scheda *Settings* → *OAuth 2 → Redirect URIs*: aggiungere `https://ivaninstores.github.io/IDEAS/` → **Add**
-4. Copiare l'**App key** (non l'App secret) e inserirla in `config.js` oppure incollarla nell'app al primo collegamento
-5. App → ⚙ → *Collega Dropbox* → autorizzare
+2. *Permissions*: `files.content.write`, `files.content.read`, `files.metadata.read` → **Submit**
+3. *Settings → Redirect URIs*: `https://ivaninstores.github.io/IDEAS/` → **Add**
+4. Copiare l'**App key** in `config.js` (`dropboxAppKey`). L'App secret non serve e non va mai inserito.
+5. Fino a 500 utenti l'app può restare in stato *Development*; oltre serve *Apply for production*.
 
 OneDrive/SharePoint e Google Drive: richiedono la registrazione dell'app (Microsoft Entra ID / Google Cloud); il motore di sync è già pronto per aggiungerli.
 
