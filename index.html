@@ -25,6 +25,7 @@
   <h1 class="brand">Idee<span class="brand-count" id="count"></span></h1>
   <div class="top-actions">
     <button class="icon-btn sync-head" id="syncHead" aria-label="Sincronizza ora" hidden><i data-lucide="refresh-cw"></i></button>
+    <button class="icon-btn has-badge" id="btnTodo" aria-label="Da fare"><i data-lucide="list-todo"></i><span class="badge" id="todoBadge"></span></button>
     <button class="icon-btn" id="btnSearch" aria-label="Cerca"><i data-lucide="search"></i></button>
     <button class="icon-btn" id="btnCats" aria-label="Categorie"><i data-lucide="folder-tree"></i></button>
     <button class="icon-btn" id="btnSettings" aria-label="Impostazioni e backup"><i data-lucide="settings-2"></i></button>
@@ -95,6 +96,17 @@
   <input type="file" id="inPhoto" accept="image/*" capture="environment" hidden>
   <input type="file" id="inVideo" accept="video/*" capture="environment" hidden>
   <input type="file" id="inFile" accept="image/*,video/*,audio/*" multiple hidden>
+</section>
+
+<!-- ============ DA FARE ============ -->
+<section class="sheet" id="todo" aria-label="Da fare" hidden>
+  <div class="sheet-head">
+    <button class="icon-btn" id="todoClose" aria-label="Indietro"><i data-lucide="arrow-left"></i></button>
+    <div class="sheet-title">Da fare <span class="brand-count" id="todoCount"></span></div>
+    <span></span>
+  </div>
+  <nav class="chips todo-chips" id="todoChips" aria-label="Filtra per categoria"></nav>
+  <div class="sheet-body list" id="todoBody"></div>
 </section>
 
 <!-- ============ DETAIL ============ -->

@@ -170,6 +170,7 @@ function renderChips() {
       return `<button class="chip st ${S.status === st.id ? 'on' : ''}" data-s="${st.id}" style="--c:${st.color}"><i data-lucide="${st.icon}"></i>${st.label}${n ? ` <b>${n}</b>` : ''}</button>`;
     }).join('');
   const due = S.ideas.filter(isDue).length;
+  const tb = $('#todoBadge'); if (tb) tb.textContent = due || '';
   const bn = $('#dueBanner');
   bn.hidden = !due && !S.due;
   bn.classList.toggle('on', S.due);
@@ -214,26 +215,75 @@ function renderList(enterId) {
       html += `<div class="day">${esc(a)} <small>${esc(b)}${b ? ' — ' : ''}${n} ${n === 1 ? 'idea' : 'idee'}</small></div>`;
       last = k;
     }
-    const col = catColor(i.catId);
-    const title = i.title || firstLine(i.text) || mediaTitle(i);
-    const body = i.title ? i.text : restLines(i.text);
-    const imgs = i.blocks.filter(b => b.type === 'image' || b.type === 'drawing').slice(0, 3);
-    const counts = countBlocks(i);
-    html += `<button class="idea ${i.id === enterId ? 'enter' : ''}" data-id="${i.id}" ${col ? `style="--c:${col}"` : ''}>
-      <span class="time">${fmtTime(i.createdAt)}</span>
+    html += cardHtml(i, enterId);
+  }
+  main.innerHTML = html;
+  icons();
+  if (!$('#todo').hidden) renderTodo();
+}
+function cardHtml(i, enterId, timeLabel, note) {
+  const col = catColor(i.catId);
+  const title = i.title || firstLine(i.text) || mediaTitle(i);
+  const body = i.title ? i.text : restLines(i.text);
+  const imgs = i.blocks.filter(b => b.type === 'image' || b.type === 'drawing').slice(0, 3);
+  const counts = countBlocks(i);
+  return `<button class="idea ${i.id === enterId ? 'enter' : ''}" data-id="${i.id}" ${col ? `style="--c:${col}"` : ''}>
+      <span class="time">${esc(timeLabel || fmtTime(i.createdAt))}</span>
       <span class="catline"><span class="cl">${i.catId ? `<span class="dot" style="--c:${col}"></span>${esc(catPath(i.catId))}` : 'Senza categoria'}</span>${statusBadge(i)}</span>
       <h4>${esc(title)}</h4>
       ${body ? `<p>${esc(body)}</p>` : ''}
       ${remindChip(i)}
+      ${note ? `<span class="stale">${esc(note)}</span>` : ''}
       ${imgs.length || counts.length ? `<span class="media-strip">
         ${imgs.map(b => `<img class="thumb" alt="" src="${track(URL.createObjectURL(b.blob))}">`).join('')}
         ${counts.map(([ic, n]) => `<span class="mtag"><i data-lucide="${ic}"></i>${n}</span>`).join('')}
       </span>` : ''}
     </button>`;
-  }
-  main.innerHTML = html;
+}
+
+/* ---------------- DA FARE ---------------- */
+const TODO_STATUSES = ['valutazione', 'corso'];
+let todoCat = null;
+function todoIdeas() {
+  return S.ideas.filter(i => TODO_STATUSES.includes(i.status) || (isDue(i) && !['fatta', 'scartata'].includes(i.status)));
+}
+function sinceStatus(i) {
+  const h = (i.statusHistory || []).filter(x => x.status === i.status).pop();
+  const days = Math.floor((Date.now() - (h?.at || i.createdAt)) / 864e5);
+  return days;
+}
+function renderTodo() {
+  let list = todoIdeas();
+  const roots = children(null).map(c => ({ c, n: list.filter(i => i.catId && rootOf(i.catId) === c.id).length })).filter(x => x.n);
+  const none = list.filter(i => !i.catId).length;
+  if (todoCat === '_none') list = list.filter(i => !i.catId);
+  else if (todoCat) list = list.filter(i => i.catId && rootOf(i.catId) === todoCat);
+  $('#todoCount').textContent = todoIdeas().length || '';
+  $('#todoChips').innerHTML = `<button class="chip ${!todoCat ? 'on' : ''}" data-t="">Tutte <b>${todoIdeas().length}</b></button>` +
+    roots.map(({ c, n }) => `<button class="chip ${todoCat === c.id ? 'on' : ''}" data-t="${c.id}"><span class="dot" style="--c:${c.color}"></span>${esc(c.name)} <b>${n}</b></button>`).join('') +
+    (none ? `<button class="chip ${todoCat === '_none' ? 'on' : ''}" data-t="_none">Senza categoria <b>${none}</b></button>` : '');
+  const due = list.filter(isDue).sort((a, b) => (a.remindAt || 0) - (b.remindAt || 0));
+  const dueIds = new Set(due.map(i => i.id));
+  const next = list.filter(i => !dueIds.has(i.id) && RC.active(i)).sort((a, b) => a.remindAt - b.remindAt);
+  const nextIds = new Set(next.map(i => i.id));
+  const rest = st => list.filter(i => i.status === st && !dueIds.has(i.id) && !nextIds.has(i.id)).sort((a, b) => sinceStatus(b) - sinceStatus(a));
+  const short = ts => new Date(ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+  const note = i => { const d = sinceStatus(i); return d >= 1 ? `${statusOf(i.status).label} da ${d} ${d === 1 ? 'giorno' : 'giorni'}` : ''; };
+  const sections = [
+    ['bell-ring', 'Da riprendere ora', due, 'due'],
+    ['calendar-clock', 'Prossimi promemoria', next, ''],
+    ['hammer', 'In corso', rest('corso'), ''],
+    ['scale', 'In valutazione', rest('valutazione'), ''],
+  ].filter(x => x[2].length);
+  $('#todoBody').innerHTML = sections.length ? sections.map(([ic, t, items, cls]) =>
+    `<div class="todo-sec ${cls}"><h3><i data-lucide="${ic}"></i>${t}<span>${items.length}</span></h3>
+     ${items.map(i => cardHtml(i, null, short(i.createdAt), cls === 'due' || nextIds.has(i.id) ? '' : note(i))).join('')}</div>`).join('')
+    : `<div class="empty"><div class="bulb"><i data-lucide="list-checks"></i></div><h2>Niente da fare</h2>
+       <p>Qui compaiono le idee In valutazione e In corso e i promemoria da riprendere.</p></div>`;
   icons();
 }
+function openTodo() { renderTodo(); openSheet('todo'); }
+
 function remindText(i) {
   if (!RC.active(i)) return '';
   return (i.remindRepeat ? RC.repeatLabel(i.remindRepeat) + ' · prossimo ' : '') + fmtRemind(i.remindAt);
@@ -765,6 +815,10 @@ function bind() {
   $('#btnSearchClose').onclick = () => { $('#searchbar').hidden = true; $('#q').value = ''; S.q = ''; renderList(); };
   $('#q').oninput = e => { S.q = e.target.value.trim(); renderList(); };
   $('#btnCats').onclick = () => { renderTree(); openSheet('cats'); };
+  $('#btnTodo').onclick = openTodo;
+  $('#todoClose').onclick = () => closeSheet('todo');
+  $('#todoChips').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; todoCat = b.dataset.t || null; renderTodo(); };
+  $('#todoBody').onclick = e => { const b = e.target.closest('.idea'); if (b) openDetail(b.dataset.id); };
   $('#btnSettings').onclick = () => { renderStorage(); window.Push?.render(); openSheet('settings'); };
 
   // composer
@@ -846,6 +900,7 @@ function bind() {
   });
   const a = new URLSearchParams(location.search).get('a');
   if (a) {
+    if (a === 'dafare') return setTimeout(openTodo, 300);
     const presets = { foto: () => $('#inPhoto').click(), voce: startAudio, disegno: openDraw, detta: startDictation };
     setTimeout(() => openComposer(null, presets[a]), 300);
   }
@@ -857,7 +912,7 @@ function topLayerCloser() {
   if ($('#dlg').open) return () => $('#dlg').close();
   if ($('#remDlg').open) return () => $('#remCancel').click();
   if (!$('#composer').hidden) return closeComposer;
-  for (const s of ['detail', 'cats', 'settings']) if (!$('#' + s).hidden) return () => closeSheet(s);
+  for (const s of ['detail', 'todo', 'cats', 'settings']) if (!$('#' + s).hidden) return () => closeSheet(s);
   return null;
 }
 

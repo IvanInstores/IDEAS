@@ -421,6 +421,22 @@ dialog::backdrop { background: rgba(16,24,43,.5); }
 .rem-due .row { width: 100%; }
 .rem-due .btn.primary { background: var(--coral); border-color: var(--coral); color: #fff; }
 
+/* ---------- da fare ---------- */
+.has-badge { position: relative; }
+.badge { position: absolute; top: 4px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: var(--coral); color: #fff; font-size: 11px; font-weight: 800; display: grid; place-items: center; }
+.badge:empty { display: none; }
+.sheet-title .brand-count { font-size: 12px; vertical-align: 4px; margin-left: 2px; }
+.todo-chips { padding-top: 10px; border-bottom: 1px solid var(--line); }
+.todo-chips .chip b { font-weight: 800; opacity: .6; }
+#todoBody { padding-top: 6px; }
+.todo-sec h3 { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-size: 19px; letter-spacing: -0.02em; margin: 18px 4px 10px; }
+.todo-sec h3 svg { width: 20px; height: 20px; color: var(--ink-soft); }
+.todo-sec h3 span { font-family: var(--body); font-size: 13px; font-weight: 800; color: var(--ink-soft); }
+.todo-sec.due h3, .todo-sec.due h3 svg { color: var(--coral); }
+#todoBody .idea .time { font-size: 15px; }
+.idea .stale { grid-column: 2; margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+
 /* ---------- sync ---------- */
 .prov { border: 1.5px solid var(--line); border-radius: var(--r-md); padding: 12px; margin-top: 10px; }
 .prov.active { border-color: var(--sage); }

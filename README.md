@@ -18,6 +18,7 @@ PWA (si installa dal browser come un'app, funziona anche offline). Nessun server
 | Stato dell'idea | Nuova → In valutazione → In corso → Fatta / Scartata. Ogni cambio è registrato con data e ora. Filtro per stato in home |
 | Promemoria | Preset (stasera, domani, lunedì, +1 settimana, +1 mese) o data/ora libera. Banner "da riprendere", notifica all'apertura dell'app, aggiunta a Google Calendar / Outlook / file .ics |
 | Sincronizzazione cloud | Dropbox attivo (cartella `/09 - IDEE`). OneDrive/SharePoint e Google Drive predisposti, da attivare |
+| Da fare | Pulsante in alto (con pallino rosso se ci sono promemoria scaduti) o scorciatoia "Da fare" sull'icona: idee *In valutazione* e *In corso* divise in Da riprendere ora / Prossimi promemoria / In corso / In valutazione, filtro per categoria principale (es. Store), e da quanti giorni sono ferme |
 | Backup | Esporta/importa un file unico |
 
 Scorciatoie: tenendo premuta l'icona dell'app (Android) → Nota vocale, Foto, Disegno.
