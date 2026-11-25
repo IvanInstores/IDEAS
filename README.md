@@ -19,13 +19,9 @@ PWA (si installa dal browser come un'app, funziona anche offline). Nessun server
 
 Scorciatoie: tenendo premuta l'icona dell'app (Android) → Nota vocale, Foto, Disegno.
 
-## Pubblicazione (una volta sola)
-1. Unire questo branch su `main`.
-2. GitHub → repo → **Settings → Pages → Source: GitHub Actions**.
-3. Il workflow `.github/workflows/pages.yml` pubblica l'app all'indirizzo `https://<utente>.github.io/IDEAS/`.
-4. Sul telefono: apri il link → Android/Chrome: menu ⋮ → *Installa app*; iPhone/Safari: Condividi → *Aggiungi alla schermata Home*.
-
-Serve HTTPS (GitHub Pages lo dà) perché microfono e fotocamera funzionino.
+## Pubblicazione
+GitHub Pages in modalità **Deploy from a branch** (`main`, cartella `/ (root)`): ogni modifica su `main` va online da sola in 1–2 minuti.
+Indirizzo: https://ivaninstores.github.io/IDEAS/ — da installare sul telefono (Android: ⋮ → Installa app; iPhone/Safari: Condividi → Aggiungi alla schermata Home).
 
 ## Regole e decisioni
 - Dati solo in locale (IndexedDB) → **fare backup periodico**.
