@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Idee</title>
+<meta name="description" content="Raccogli idee con testo, voce, disegni, foto, video e audio.">
+<meta name="theme-color" content="#18233F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Idee">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ HOME ============ -->
+<header class="topbar">
+  <h1 class="brand">Idee<span class="brand-count" id="count"></span></h1>
+  <div class="top-actions">
+    <button class="icon-btn" id="btnSearch" aria-label="Cerca"><i data-lucide="search"></i></button>
+    <button class="icon-btn" id="btnCats" aria-label="Categorie"><i data-lucide="folder-tree"></i></button>
+    <button class="icon-btn" id="btnSettings" aria-label="Impostazioni e backup"><i data-lucide="settings-2"></i></button>
+  </div>
+</header>
+
+<div class="searchbar" id="searchbar" hidden>
+  <i data-lucide="search"></i>
+  <input id="q" type="search" placeholder="Cerca nelle idee" autocomplete="off">
+  <button class="icon-btn small" id="btnSearchClose" aria-label="Chiudi ricerca"><i data-lucide="x"></i></button>
+</div>
+
+<nav class="chips" id="chips" aria-label="Filtra per categoria"></nav>
+<nav class="chips sub" id="subchips" aria-label="Sottocategorie" hidden></nav>
+
+<main id="list" class="list" aria-live="polite"></main>
+
+<!-- 3D capture cube -->
+<button id="fab" class="fab" aria-label="Nuova idea">
+  <span class="cube-scene">
+    <span class="cube" id="cube">
+      <span class="face f-front"><i data-lucide="lightbulb"></i></span>
+      <span class="face f-back"><i data-lucide="mic"></i></span>
+      <span class="face f-right"><i data-lucide="pen-tool"></i></span>
+      <span class="face f-left"><i data-lucide="camera"></i></span>
+      <span class="face f-top"><i data-lucide="video"></i></span>
+      <span class="face f-bottom"><i data-lucide="audio-lines"></i></span>
+    </span>
+  </span>
+</button>
+
+<!-- ============ COMPOSER ============ -->
+<section class="sheet" id="composer" aria-label="Nuova idea" hidden>
+  <div class="sheet-head">
+    <button class="icon-btn" id="cmpClose" aria-label="Annulla"><i data-lucide="x"></i></button>
+    <div class="stamp" id="cmpStamp"></div>
+    <button class="btn primary" id="cmpSave"><i data-lucide="check"></i>Salva</button>
+  </div>
+  <div class="sheet-body">
+    <input id="cmpTitle" class="title-input" placeholder="Titolo (facoltativo)" maxlength="120">
+    <label class="cat-select">
+      <i data-lucide="folder"></i>
+      <select id="cmpCat" aria-label="Categoria"></select>
+    </label>
+    <div class="text-wrap">
+      <textarea id="cmpText" placeholder="Scrivi l'idea, oppure dettala col microfono…" rows="5"></textarea>
+      <div class="interim" id="interim"></div>
+    </div>
+    <div class="blocks" id="cmpBlocks"></div>
+  </div>
+  <div class="toolbar" role="toolbar" aria-label="Aggiungi contenuti">
+    <button class="tool" id="tDictate"><i data-lucide="mic"></i><span>Detta</span></button>
+    <button class="tool" id="tAudio"><i data-lucide="audio-lines"></i><span>Audio</span></button>
+    <button class="tool" id="tDraw"><i data-lucide="pen-tool"></i><span>Disegno</span></button>
+    <button class="tool" id="tPhoto"><i data-lucide="camera"></i><span>Foto</span></button>
+    <button class="tool" id="tVideo"><i data-lucide="video"></i><span>Video</span></button>
+    <button class="tool" id="tFile"><i data-lucide="paperclip"></i><span>Galleria</span></button>
+  </div>
+  <input type="file" id="inPhoto" accept="image/*" capture="environment" hidden>
+  <input type="file" id="inVideo" accept="video/*" capture="environment" hidden>
+  <input type="file" id="inFile" accept="image/*,video/*,audio/*" multiple hidden>
+</section>
+
+<!-- ============ DETAIL ============ -->
+<section class="sheet" id="detail" aria-label="Dettaglio idea" hidden>
+  <div class="sheet-head">
+    <button class="icon-btn" id="detClose" aria-label="Indietro"><i data-lucide="arrow-left"></i></button>
+    <div class="stamp" id="detStamp"></div>
+    <div class="row">
+      <button class="icon-btn" id="detShare" aria-label="Condividi"><i data-lucide="share-2"></i></button>
+      <button class="icon-btn" id="detEdit" aria-label="Modifica"><i data-lucide="pencil"></i></button>
+      <button class="icon-btn danger" id="detDelete" aria-label="Elimina"><i data-lucide="trash-2"></i></button>
+    </div>
+  </div>
+  <div class="sheet-body" id="detBody"></div>
+</section>
+
+<!-- ============ CATEGORIES ============ -->
+<section class="sheet" id="cats" aria-label="Categorie" hidden>
+  <div class="sheet-head">
+    <button class="icon-btn" id="catClose" aria-label="Indietro"><i data-lucide="arrow-left"></i></button>
+    <div class="sheet-title">Categorie</div>
+    <button class="btn primary" id="catAdd"><i data-lucide="folder-plus"></i>Nuova</button>
+  </div>
+  <div class="sheet-body">
+    <p class="hint">Tocca <i data-lucide="corner-down-right" class="inline"></i> per creare una sottocategoria. Eliminando una categoria, le sue idee passano a quella superiore.</p>
+    <ul class="tree" id="tree"></ul>
+  </div>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<section class="sheet" id="settings" aria-label="Impostazioni" hidden>
+  <div class="sheet-head">
+    <button class="icon-btn" id="setClose" aria-label="Indietro"><i data-lucide="arrow-left"></i></button>
+    <div class="sheet-title">Backup e dati</div>
+    <span></span>
+  </div>
+  <div class="sheet-body">
+    <div class="panel">
+      <h3><i data-lucide="hard-drive"></i>Spazio usato</h3>
+      <p id="storageInfo">Calcolo…</p>
+      <p class="hint">Le idee restano solo su questo telefono. Fai un backup ogni tanto e salvalo su OneDrive o Dropbox.</p>
+    </div>
+    <div class="panel">
+      <h3><i data-lucide="download"></i>Esporta backup</h3>
+      <p class="hint">Un unico file con idee, categorie e allegati.</p>
+      <button class="btn" id="btnExport"><i data-lucide="download"></i>Scarica backup</button>
+    </div>
+    <div class="panel">
+      <h3><i data-lucide="upload"></i>Ripristina backup</h3>
+      <p class="hint">Le idee del file si aggiungono a quelle già presenti, senza doppioni.</p>
+      <button class="btn" id="btnImport"><i data-lucide="upload"></i>Scegli file</button>
+      <input type="file" id="inImport" accept="application/json,.json" hidden>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DRAW ============ -->
+<section class="draw" id="draw" aria-label="Disegno" hidden>
+  <canvas id="canvas"></canvas>
+  <div class="draw-top">
+    <button class="icon-btn" id="drwCancel" aria-label="Annulla disegno"><i data-lucide="x"></i></button>
+    <div class="row">
+      <button class="icon-btn" id="drwUndo" aria-label="Annulla tratto"><i data-lucide="undo-2"></i></button>
+      <button class="icon-btn" id="drwClear" aria-label="Pulisci"><i data-lucide="eraser"></i></button>
+    </div>
+    <button class="btn primary" id="drwDone"><i data-lucide="check"></i>Usa</button>
+  </div>
+  <div class="draw-bottom">
+    <div class="swatches" id="swatches"></div>
+    <div class="sizes" id="sizes"></div>
+  </div>
+</section>
+
+<!-- ============ AUDIO RECORDER ============ -->
+<section class="recorder" id="recorder" aria-label="Registrazione audio" hidden>
+  <div class="rec-orb" id="recOrb"><i data-lucide="mic"></i></div>
+  <div class="rec-time" id="recTime">0:00</div>
+  <div class="row">
+    <button class="btn ghost" id="recCancel">Annulla</button>
+    <button class="btn rec" id="recStop"><i data-lucide="square"></i>Fine</button>
+  </div>
+</section>
+
+<!-- dialog -->
+<dialog id="dlg">
+  <form method="dialog" class="dlg">
+    <h3 id="dlgTitle"></h3>
+    <input id="dlgInput" maxlength="60" autocomplete="off">
+    <div class="swatches" id="dlgColors"></div>
+    <p id="dlgMsg" class="hint"></p>
+    <div class="row end">
+      <button value="cancel" class="btn ghost">Annulla</button>
+      <button value="ok" class="btn primary" id="dlgOk">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="vendor/lucide.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
